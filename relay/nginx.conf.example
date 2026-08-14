@@ -1,15 +1,15 @@
 # OpenCode Remote 中继 · nginx 反代配置示例
-# 用法：域名加一条 A 记录 relay.zhileai.net → 服务器IP，
+# 用法：域名加一条 A 记录 ocrelay.zhileai.net → 服务器IP，
 #       然后把本文件放进 /etc/nginx/conf.d/（或 sites-available）后 nginx -s reload
 #
 # 若你用 Caddy，等效配置：
-#   relay.zhileai.net {
+#   ocrelay.zhileai.net {
 #       reverse_proxy 127.0.0.1:8010
 #   }
 
 server {
     listen 80;
-    server_name relay.zhileai.net;
+    server_name ocrelay.zhileai.net;
 
     # 申请/续期证书用（已有 certbot 的按你现有方式即可）
     location /.well-known/acme-challenge/ {
@@ -23,11 +23,11 @@ server {
 
 server {
     listen 443 ssl http2;
-    server_name relay.zhileai.net;
+    server_name ocrelay.zhileai.net;
 
     # 证书路径按你现有项目的配置改（certbot 或自签）
-    ssl_certificate     /etc/letsencrypt/live/relay.zhileai.net/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/relay.zhileai.net/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/ocrelay.zhileai.net/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ocrelay.zhileai.net/privkey.pem;
 
     # WebSocket 关键配置
     location / {
