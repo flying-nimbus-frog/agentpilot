@@ -191,12 +191,18 @@ def cmd_login(args) -> int:
     if not res2["ok"]:
         print(f"[companion] 设备注册失败: {res2['error']}")
         return 1
-    conf = cfg.Config({})
+    # 复用已有配置，保留 permission/端口/密码等设置；仅更新连接与设备信息
+    existing = cfg.load()
+    conf = existing if existing else cfg.Config({})
     conf.relay_url = args.relay
     conf.device_id = res2["data"]["deviceID"]
     conf.device_token = res2["data"]["deviceToken"]
-    conf.opencode_password = f"oc-{secrets.token_urlsafe(16)}"
-    conf.directory = str(Path(args.dir or os.getcwd()).resolve())
+    if args.dir:
+        conf.directory = str(Path(args.dir).resolve())
+    elif not conf.directory:
+        conf.directory = os.getcwd()
+    if not conf.opencode_password:
+        conf.opencode_password = f"oc-{secrets.token_urlsafe(16)}"
     cfg.save(conf)
     print(f"[companion] ✅ 设备已注册: {conf.device_id}")
     print(f"[companion] 配置已保存: {cfg.CONFIG_FILE}")
