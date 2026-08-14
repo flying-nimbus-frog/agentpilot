@@ -1,0 +1,20 @@
+services:
+  ocrelay:
+    build: .
+    container_name: ocrelay
+    restart: always
+    ports:
+      - "${RELAY_PORT:-8010}:8000"
+    volumes:
+      - ocrelay-data:/data
+    environment:
+      RELAY_JWT_SECRET: ${RELAY_JWT_SECRET:?请在 .env 中设置 RELAY_JWT_SECRET}
+      RELAY_DB: /data/relay.db
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  ocrelay-data:

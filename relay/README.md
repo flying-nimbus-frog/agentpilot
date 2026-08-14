@@ -16,13 +16,30 @@ RELAY_PORT=8080 .venv/bin/python main.py
 - 数据: 默认 `relay/relay.db`（可用 `RELAY_DB` 环境变量改路径）
 - 密钥: `RELAY_JWT_SECRET`（生产必须设置，否则 token 可被伪造）
 
-## 生产部署（Docker）
+## 生产部署（Docker Compose，推荐）
+
+```bash
+# 首次（含克隆代码 + 生成密钥 + 拉起）
+git clone https://gitee.com/sep20210917/opencode-phone-prototype.git && cd opencode-phone-prototype/relay && echo "RELAY_JWT_SECRET=$(openssl rand -hex 32)" > .env && docker compose up -d --build
+
+# 之后重启/更新
+docker compose up -d --build
+
+# 查看状态
+docker compose ps && curl http://localhost:8010/health
+```
+
+- 宿主端口默认 **8010**（8080 可能被占用），可用环境变量改：`RELAY_PORT=9000 docker compose up -d`
+- 数据（SQLite）持久化在 Docker 卷 `ocrelay-data`
+- `RELAY_JWT_SECRET` 从 `.env` 读取，必须设置（启动前未设置会直接报错，防止默认密钥上线）
+
+## 生产部署（Docker 单容器）
 
 ```bash
 docker build -t opencode-relay .
 mkdir -p /data/ocrelay
 docker run -d --name ocrelay --restart always \
-  -p 8000:8000 \
+  -p 8010:8000 \
   -v /data/ocrelay:/data \
   -e RELAY_JWT_SECRET="$(openssl rand -hex 32)" \
   -e RELAY_DB=/data/relay.db \
@@ -47,6 +64,7 @@ After=network.target
 User=ocrelay
 WorkingDirectory=/opt/ocrelay
 Environment=RELAY_JWT_SECRET=<随机长字符串>
+Environment=RELAY_PORT=8010
 ExecStart=/opt/ocrelay/.venv/bin/python main.py
 Restart=always
 
@@ -72,7 +90,7 @@ Caddy 自动申请证书，`http://` 自动重定向 `https://`。
 
 ## 防火墙
 
-开放 443（TLS 由 Caddy 终止）。8000 不要直接暴露公网。
+开放 **8010/TCP**（若用 Caddy 反代则只开 443，8010 不要直接暴露公网）。
 
 ## 测试
 

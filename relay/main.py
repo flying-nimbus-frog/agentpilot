@@ -1,10 +1,12 @@
 import asyncio
 import json
 import logging
+import os
 
 import db
 from auth import create_token, decode_token, hash_password, verify_password
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from hub import hub
 from pydantic import BaseModel
@@ -13,6 +15,15 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("relay")
 
 app = FastAPI(title="OpenCode Remote Relay", version="2.0.0")
+
+# 开发/Web 调试用 CORS（RELAY_CORS=1 开启；手机原生 App 不受 CORS 限制）
+if os.environ.get("RELAY_CORS") == "1":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 HEARTBEAT_TIMEOUT = 90  # 秒，超过视为离线
 
