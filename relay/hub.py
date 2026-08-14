@@ -85,6 +85,7 @@ class Hub:
                     "id": d["id"],
                     "name": d["name"],
                     "online": entry is not None,
+                    "status": d.get("status", "active"),
                     "version": d.get("version"),
                     "lastSeen": d["last_seen"],
                 }

@@ -5,6 +5,7 @@ class Device {
   final String id;
   final String name;
   final bool online;
+  final String status; // active | pending
   final String? version;
   final int lastSeen;
 
@@ -12,14 +13,18 @@ class Device {
     required this.id,
     required this.name,
     required this.online,
+    this.status = 'active',
     this.version,
     required this.lastSeen,
   });
+
+  bool get isPending => status == 'pending';
 
   factory Device.fromJson(Map<String, dynamic> j) => Device(
         id: j['id'] as String,
         name: j['name'] as String,
         online: j['online'] as bool? ?? false,
+        status: j['status'] as String? ?? 'active',
         version: j['version'] as String?,
         lastSeen: j['lastSeen'] as int? ?? 0,
       );

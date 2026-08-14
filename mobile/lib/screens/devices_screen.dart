@@ -75,6 +75,56 @@ class _DevicesScreenState extends State<DevicesScreen> {
     );
   }
 
+  Future<void> _pair(Device d) async {
+    final codeCtrl = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('输入配对码'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('请在电脑上运行 companion 的终端里查看 6 位配对码',
+                style: TextStyle(fontSize: 13, color: Colors.grey)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: codeCtrl,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              autofocus: true,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 22, letterSpacing: 8),
+              decoration: const InputDecoration(
+                hintText: '000000',
+                border: OutlineInputBorder(),
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, codeCtrl.text.trim()),
+            child: const Text('确认配对'),
+          ),
+        ],
+      ),
+    );
+    if (code == null || code.isEmpty) return;
+    try {
+      await widget.app.pairDevice(d.id, code);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('✅ 配对成功')));
+      await _refresh();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -123,27 +173,46 @@ class _DevicesScreenState extends State<DevicesScreen> {
               Card(
                 child: ListTile(
                   leading: Icon(
-                    d.online ? Icons.desktop_mac : Icons.desktop_mac_outlined,
-                    color: d.online ? Colors.green : Colors.grey,
+                    d.isPending
+                        ? Icons.link
+                        : d.online
+                            ? Icons.desktop_mac
+                            : Icons.desktop_mac_outlined,
+                    color: d.isPending
+                        ? Colors.orange
+                        : d.online
+                            ? Colors.green
+                            : Colors.grey,
                   ),
                   title: Text(d.name),
                   subtitle: Text(
-                    d.online
-                        ? (d.version != null ? '在线 · v${d.version}' : '在线')
-                        : '离线 · 上次 ${_fmt(d.lastSeen)}',
+                    d.isPending
+                        ? '待配对 · 点击输入配对码'
+                        : d.online
+                            ? (d.version != null ? '在线 · v${d.version}' : '在线')
+                            : '离线 · 上次 ${_fmt(d.lastSeen)}',
                   ),
-                  trailing: d.online
-                      ? const Icon(Icons.chevron_right)
-                      : const Text('离线', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                  enabled: d.online,
-                  onTap: d.online
-                      ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => SessionsScreen(app: widget.app, device: d),
-                            ),
-                          )
-                      : null,
+                  trailing: d.isPending
+                      ? TextButton(
+                          onPressed: () => _pair(d),
+                          child: const Text('配对', style: TextStyle(color: Colors.orange)),
+                        )
+                      : d.online
+                          ? const Icon(Icons.chevron_right)
+                          : const Text('离线',
+                              style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  enabled: !d.isPending && d.online,
+                  onTap: d.isPending
+                      ? () => _pair(d)
+                      : d.online
+                          ? () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      SessionsScreen(app: widget.app, device: d),
+                                ),
+                              )
+                          : null,
                 ),
               ),
           ],

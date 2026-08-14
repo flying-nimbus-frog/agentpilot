@@ -30,12 +30,26 @@ def init_db() -> None:
                 user_id TEXT NOT NULL REFERENCES users(id),
                 name TEXT NOT NULL,
                 token TEXT NOT NULL,
+                pending_token TEXT,
                 version TEXT,
+                status TEXT NOT NULL DEFAULT 'active',
+                pairing_code TEXT,
+                pairing_expires INTEGER,
                 created_at INTEGER NOT NULL,
                 last_seen INTEGER NOT NULL
             );
             """
         )
+        # 旧库迁移：补充 status/pairing 字段（老设备视为已激活）
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(devices)")}
+        if "status" not in cols:
+            conn.execute("ALTER TABLE devices ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+        if "pending_token" not in cols:
+            conn.execute("ALTER TABLE devices ADD COLUMN pending_token TEXT")
+        if "pairing_code" not in cols:
+            conn.execute("ALTER TABLE devices ADD COLUMN pairing_code TEXT")
+        if "pairing_expires" not in cols:
+            conn.execute("ALTER TABLE devices ADD COLUMN pairing_expires INTEGER")
 
 
 def create_user(email: str, password_hash: str, salt: str) -> dict:
@@ -75,6 +89,47 @@ def register_device(user_id: str, name: str) -> dict:
     return {"id": dev_id, "name": name, "token": token}
 
 
+def create_pending_device(user_id: str, name: str, pairing_code: str, ttl_sec: int = 600) -> dict:
+    """创建待配对设备，返回 pendingID 与临时 pendingToken。"""
+    dev_id = f"dev_{uuid.uuid4().hex[:12]}"
+    pending_token = f"pt_{secrets.token_urlsafe(32)}"
+    now = int(time.time() * 1000)
+    with _conn() as conn:
+        conn.execute(
+            """INSERT INTO devices (id, user_id, name, token, pending_token, status, pairing_code, pairing_expires, created_at, last_seen)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (dev_id, user_id, name, pending_token, pending_token, "pending", pairing_code,
+             now + ttl_sec * 1000, now, now),
+        )
+    return {"id": dev_id, "name": name, "pendingToken": pending_token, "pairingCode": pairing_code}
+
+
+def activate_pending_device(device_id: str, user_id: str) -> dict | None:
+    """手机确认配对：生成正式设备令牌，返回 (deviceToken) 或 None。"""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM devices WHERE id=? AND user_id=?", (device_id, user_id)
+        ).fetchone()
+        if not row or row["status"] != "pending":
+            return None
+        token = f"dt_{secrets.token_urlsafe(32)}"
+        now = int(time.time() * 1000)
+        conn.execute(
+            "UPDATE devices SET status='active', token=?, pairing_code=NULL, pairing_expires=NULL, last_seen=? WHERE id=?",
+            (token, now, device_id),
+        )
+    return {"deviceID": device_id, "deviceToken": token}
+
+
+def get_pending_device(device_id: str, user_id: str) -> dict | None:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM devices WHERE id=? AND user_id=? AND status='pending'",
+            (device_id, user_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def list_devices(user_id: str) -> list[dict]:
     with _conn() as conn:
         rows = conn.execute(
@@ -85,7 +140,25 @@ def list_devices(user_id: str) -> list[dict]:
 
 def get_device_by_token(token: str) -> dict | None:
     with _conn() as conn:
-        row = conn.execute("SELECT * FROM devices WHERE token=?", (token,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM devices WHERE token=? AND status='active'", (token,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_pending_device_by_token(token: str) -> dict | None:
+    """pendingToken 有效期内可查配对状态；激活后可凭 pendingToken 取一次正式令牌。"""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM devices WHERE (token=? OR pending_token=?) AND status='pending'",
+            (token, token),
+        ).fetchone()
+        if row:
+            return dict(row)
+        row = conn.execute(
+            "SELECT * FROM devices WHERE pending_token=? AND status='active'",
+            (token,),
+        ).fetchone()
     return dict(row) if row else None
 
 

@@ -197,8 +197,9 @@ def cmd_login(args) -> int:
     existing = cfg.load()
     conf = existing if existing else cfg.Config({})
     conf.relay_url = args.relay
-    conf.device_id = res2["data"]["deviceID"]
-    conf.device_token = res2["data"]["deviceToken"]
+    conf.device_id = res2["data"]["pendingID"]
+    conf.pending_token = res2["data"]["pendingToken"]
+    conf.device_token = ""
     if args.dir:
         conf.directory = str(Path(args.dir).resolve())
     elif not conf.directory:
@@ -206,7 +207,10 @@ def cmd_login(args) -> int:
     if not conf.opencode_password:
         conf.opencode_password = f"oc-{secrets.token_urlsafe(16)}"
     cfg.save(conf)
-    print(f"[companion] ✅ 设备已注册: {conf.device_id}")
+    code = res2["data"]["pairingCode"]
+    print(f"[companion] ✅ 已创建待配对设备: {conf.device_id}")
+    print(f"[companion] 🔐 配对码: {code}  （{res2['data']['expiresIn']} 秒内有效）")
+    print(f"[companion]    在手机 App 设备列表中找到本设备，输入配对码完成绑定")
     print(f"[companion] 配置已保存: {cfg.CONFIG_FILE}")
     return 0
 
@@ -214,13 +218,19 @@ def cmd_login(args) -> int:
 def cmd_run(args) -> int:
     conf = cfg.load()
     if conf is None:
-        print("[companion] 尚未登录，先执行: python main.py --login --email 你的邮箱 --password 密码")
+        print("[companion] 尚未登录，先执行: python main.py login --email 你的邮箱 --password 密码")
         return 1
     if args.relay:
         conf.relay_url = args.relay
     if args.dir:
         conf.directory = str(Path(args.dir).resolve())
 
+    if not conf.paired:
+        return _wait_pair(conf, args)
+    return _run_daemon(conf)
+
+
+def _run_daemon(conf: cfg.Config) -> int:
     proc = OpenCodeProc(
         conf.opencode_port, conf.opencode_password, conf.directory, conf.permission
     )
@@ -244,6 +254,56 @@ def cmd_run(args) -> int:
         return loop.run_until_complete(_run_with_stop(amain(), stop))
     finally:
         loop.close()
+
+
+def _wait_pair(conf: cfg.Config, args) -> int:
+    """未配对：轮询配对状态，手机确认后保存正式令牌。"""
+    http = conf.relay_url.replace("ws://", "http://").replace("wss://", "https://")
+    url = f"{http}/api/devices/{conf.device_id}/status?token={conf.pending_token}"
+    print(f"[companion] 🔐 等待手机确认配对（设备 {conf.device_id}）…")
+    print(f"[companion]    请打开手机 App → 设备列表 → 找到本设备 → 输入配对码")
+    import time as _time
+    deadline = _time.time() + 600
+    while _time.time() < deadline:
+        try:
+            res = http_get_json(url)
+            if not res["ok"]:
+                if res.get("code") in (404, 410):
+                    print(f"[companion] 配对请求已失效: {res['error']}，请重新 login")
+                    return 1
+                print(f"[companion] 查询失败: {res['error']}")
+                _time.sleep(3)
+                continue
+            data = res["data"]
+            if data.get("status") == "active":
+                conf.device_token = data["deviceToken"]
+                conf.pending_id = ""
+                conf.pending_token = ""
+                cfg.save(conf)
+                print("[companion] ✅ 配对成功！设备已激活，继续启动…")
+                return _run_daemon(conf)
+        except Exception as e:
+            print(f"[companion] 查询异常: {e}")
+        _time.sleep(3)
+    print("[companion] 配对超时（10 分钟），请重新 login")
+    return 1
+
+
+def http_get_json(url: str) -> dict:
+    import urllib.request
+
+    req = urllib.request.Request(url)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return {"ok": True, "data": json.loads(r.read())}
+    except urllib.error.HTTPError as e:
+        try:
+            detail = json.loads(e.read()).get("detail", str(e))
+        except Exception:
+            detail = str(e)
+        return {"ok": False, "code": e.code, "error": detail}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 async def _run_with_stop(coro, stop: asyncio.Event):
