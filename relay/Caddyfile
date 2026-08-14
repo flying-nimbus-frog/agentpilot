@@ -1,0 +1,3 @@
+zhileai.net {
+	reverse_proxy ocrelay:8000
+}

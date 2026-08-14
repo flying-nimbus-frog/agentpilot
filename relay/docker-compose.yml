@@ -23,5 +23,21 @@ services:
       timeout: 5s
       retries: 3
 
+  caddy:
+    image: ${CADDY_IMAGE:-docker.m.daocloud.io/library/caddy:2-alpine}
+    container_name: ocrelay-caddy
+    restart: always
+    depends_on:
+      - ocrelay
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
 volumes:
   ocrelay-data:
+  caddy-data:
+  caddy-config:
