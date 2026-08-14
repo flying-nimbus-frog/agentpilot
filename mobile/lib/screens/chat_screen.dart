@@ -34,6 +34,8 @@ class _ChatScreenState extends State<ChatScreen> {
   PermissionAsk? _permission;
   bool _loading = true;
   String? _error;
+  DateTime _lastEvent = DateTime.now();
+  Timer? _watchdog;
 
   String get _sid => widget.session.id;
   String get _did => widget.device.id;
@@ -43,11 +45,20 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _load();
     _sub = widget.app.events.listen(_onEvent);
+    // 看门狗：运行中超过 90s 无任何事件 → 视为卡死，重置状态并刷新
+    _watchdog = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (_state == '运行中' &&
+          DateTime.now().difference(_lastEvent).inSeconds > 90) {
+        setState(() => _state = '空闲');
+        _load();
+      }
+    });
   }
 
   @override
   void dispose() {
     _sub?.cancel();
+    _watchdog?.cancel();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -77,6 +88,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final props = (ev['properties'] as Map?)?.cast<String, dynamic>() ?? {};
     final sid = props['sessionID'];
     if (sid != _sid) return;
+    _lastEvent = DateTime.now();
     switch (ev['type']) {
       case 'message.part.updated':
         final part = props['part'];
