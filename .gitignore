@@ -1,0 +1,35 @@
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node / Expo (v1)
+node_modules/
+.expo/
+dist/
+
+# 数据库与本地配置（含账号数据，勿提交）
+relay/relay.db
+relay/relay.db-*
+companion/companion.json
+
+# Flutter
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins*
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/*.iml
+
+# 日志
+logs/
+*.log
