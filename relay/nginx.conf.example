@@ -1,17 +1,17 @@
-# OpenCode Remote 中继 · nginx 反代配置示例
-# 用法：域名加一条 A 记录 ocrelay.zhileai.net → 服务器IP，
-#       然后把本文件放进 /etc/nginx/conf.d/（或 sites-available）后 nginx -s reload
+# OpenCode Remote 中继 · nginx 反代配置
 #
-# 若你用 Caddy，等效配置：
-#   ocrelay.zhileai.net {
-#       reverse_proxy 127.0.0.1:8010
-#   }
+# 使用步骤（两阶段）：
+#   1. 先按本文件（443 段已注释）启用 80 端口
+#   2. certbot 申请证书
+#   3. 解开下方 443 段注释，reload
+#
+# 前置：DNS 添加 A 记录 ocrelay → 服务器IP
 
 server {
     listen 80;
     server_name ocrelay.zhileai.net;
 
-    # 申请/续期证书用（已有 certbot 的按你现有方式即可）
+    # 证书申请/续期用（webroot 方式）
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
     }
@@ -21,23 +21,23 @@ server {
     }
 }
 
-server {
-    listen 443 ssl http2;
-    server_name ocrelay.zhileai.net;
-
-    # 证书路径按你现有项目的配置改（certbot 或自签）
-    ssl_certificate     /etc/letsencrypt/live/ocrelay.zhileai.net/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/ocrelay.zhileai.net/privkey.pem;
-
-    # WebSocket 关键配置
-    location / {
-        proxy_pass http://127.0.0.1:8010;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
-    }
-}
+# ============ 证书申请成功后，删除下面每行开头的 "#" 再 reload ============
+# server {
+#     listen 443 ssl http2;
+#     server_name ocrelay.zhileai.net;
+#
+#     ssl_certificate     /etc/letsencrypt/live/ocrelay.zhileai.net/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/ocrelay.zhileai.net/privkey.pem;
+#
+#     # WebSocket 关键配置（不能删）
+#     location / {
+#         proxy_pass http://127.0.0.1:8010;
+#         proxy_http_version 1.1;
+#         proxy_set_header Upgrade $http_upgrade;
+#         proxy_set_header Connection "upgrade";
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_read_timeout 3600s;
+#         proxy_send_timeout 3600s;
+#     }
+# }
