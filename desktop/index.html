@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenCode Remote · 桌面端</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <header>
+      <div class="brand">📡 OpenCode Remote</div>
+      <div class="status-bar">
+        <span id="st-relay" class="chip gray">中继 --</span>
+        <span id="st-device" class="chip gray">设备 --</span>
+        <span id="st-agent" class="chip gray">Agent --</span>
+      </div>
+    </header>
+
+    <nav>
+      <button id="tab-device" class="tab active">设备</button>
+      <button id="tab-agent" class="tab">Agent</button>
+      <button id="tab-log" class="tab">日志</button>
+    </nav>
+
+    <!-- ============ 设备 ============ -->
+    <section id="pane-device" class="pane active">
+      <div class="card">
+        <h3>账号</h3>
+        <label>服务器地址</label>
+        <input id="in-relay" placeholder="https://relay.zhileai.net" />
+        <div class="row2">
+          <div>
+            <label>邮箱</label>
+            <input id="in-email" placeholder="you@example.com" />
+          </div>
+          <div>
+            <label>密码</label>
+            <input id="in-pass" type="password" placeholder="******" />
+          </div>
+        </div>
+        <div class="btns">
+          <button id="btn-login" class="primary">登录</button>
+          <button id="btn-register">注册</button>
+        </div>
+        <p id="account-msg" class="msg"></p>
+      </div>
+
+      <div class="card">
+        <h3>设备绑定</h3>
+        <div id="device-status" class="msg">未登录</div>
+        <div id="pairing-box" class="pairing hidden">
+          <div class="pairing-code" id="pairing-code">------</div>
+          <p class="dim">在手机 App 设备列表中输入此配对码完成绑定</p>
+        </div>
+        <div class="btns">
+          <button id="btn-device-register" class="primary" disabled>注册本机为设备</button>
+          <button id="btn-device-unbind" class="danger hidden">解绑设备</button>
+        </div>
+        <p id="device-msg" class="msg"></p>
+      </div>
+    </section>
+
+    <!-- ============ Agent ============ -->
+    <section id="pane-agent" class="pane">
+      <div class="card">
+        <h3>Agent（opencode）</h3>
+        <p id="agent-detect" class="msg">检测中…</p>
+        <label>工作目录</label>
+        <input id="in-agent-dir" placeholder="/Users/you/projects" />
+        <label>权限配置（可选，JSON）</label>
+        <textarea id="in-permission" rows="3" placeholder='{"bash":"ask"}'></textarea>
+        <div class="btns">
+          <button id="btn-agent-start" class="primary">启动 Agent</button>
+          <button id="btn-agent-stop" class="danger">停止 Agent</button>
+        </div>
+        <p id="agent-msg" class="msg"></p>
+      </div>
+    </section>
+
+    <!-- ============ 日志 ============ -->
+    <section id="pane-log" class="pane">
+      <div class="card log-card">
+        <h3>运行日志</h3>
+        <pre id="log-view"></pre>
+      </div>
+    </section>
+  </body>
+</html>
