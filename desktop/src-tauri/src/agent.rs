@@ -30,6 +30,20 @@ fn which(name: &str) -> Option<PathBuf> {
     None
 }
 
+/// 杀掉占用指定端口的进程（macOS lsof；用于清理上次实例的孤儿 opencode）
+async fn kill_port_occupant(port: u16) {
+    let out = Command::new("lsof")
+        .args(["-ti", &format!("tcp:{port}")])
+        .output()
+        .await;
+    if let Ok(out) = out {
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        for pid in stdout.split_whitespace() {
+            let _ = Command::new("kill").arg(pid).status().await;
+        }
+    }
+}
+
 pub struct OpenCodeAgent {
     pub port: u16,
     pub child: Option<Child>,
@@ -102,6 +116,8 @@ impl OpenCodeAgent {
                 return Ok(()); // 已在运行
             }
         }
+        // 清理占用目标端口的进程（可能是上一次实例留下的孤儿 opencode）
+        kill_port_occupant(self.port).await;
         let mut cmd = Command::new(&bin);
         cmd.args(["serve", "--hostname", "127.0.0.1", "--port", &self.port.to_string()])
             .current_dir(dir)
@@ -113,9 +129,14 @@ impl OpenCodeAgent {
             cmd.env("OPENCODE_PERMISSION", p);
         }
         self.child = Some(cmd.spawn().map_err(|e| format!("启动失败: {e}"))?);
-        // 等待就绪
+        // 等待就绪；进程提前退出则立即报错
         for _ in 0..30 {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            if let Some(child) = &mut self.child {
+                if let Some(status) = child.try_wait().ok().flatten() {
+                    return Err(format!("opencode 进程异常退出: {status}"));
+                }
+            }
             if self.health().await {
                 return Ok(());
             }
