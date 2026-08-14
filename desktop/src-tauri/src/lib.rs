@@ -87,9 +87,7 @@ async fn device_register(
     if s.token.is_empty() {
         return Err("请先登录".into());
     }
-    let hostname = std::env::var("HOSTNAME")
-        .or_else(|_| hostname())
-        .unwrap_or_else(|_| "Mac".into());
+    let hostname = machine_name();
     let resp =
         relay::register_device(&s.http_base(), &s.token, &format!("{hostname} ({})", s.email)).await?;
     state.store.update(|cfg| {
@@ -107,10 +105,25 @@ async fn device_register(
     }))
 }
 
-fn hostname() -> Result<String, std::io::Error> {
+/// 取 macOS 计算机名（如 "小彭的 MacBook Air"）；失败时兜底用 hostname 命令
+fn machine_name() -> String {
     use std::process::Command;
-    let out = Command::new("hostname").output()?;
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    if let Ok(out) = Command::new("scutil")
+        .args(["--get", "ComputerName"])
+        .output()
+    {
+        let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !name.is_empty() && !name.contains('.') {
+            return name;
+        }
+    }
+    if let Ok(out) = Command::new("hostname").output() {
+        let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !name.is_empty() && name != "localhost" && !name.contains('.') {
+            return name;
+        }
+    }
+    "Mac".into()
 }
 
 #[tauri::command]

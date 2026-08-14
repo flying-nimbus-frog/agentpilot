@@ -95,15 +95,21 @@ pub async fn run(app: AppHandle, store: Arc<Store>, agent: Arc<Mutex<OpenCodeAge
                     Ok((sock, _)) => {
                         let (sink, stream) = sock.split();
                         ws_sink = Some(sink);
-                        // 读循环：中继 → 通道
+                        // 读循环：中继 → 通道（忽略 Ping/Pong 等协议帧，仅 Text 转发）
                         let (tx_read, rx_read) = mpsc::channel::<Value>(64);
                         tokio::spawn(async move {
                             let mut stream = stream;
-                            while let Some(Ok(WsMessage::Text(t))) = stream.next().await {
-                                if let Ok(v) = serde_json::from_str::<Value>(&t) {
-                                    if tx_read.send(v).await.is_err() {
-                                        break;
+                            loop {
+                                match stream.next().await {
+                                    Some(Ok(WsMessage::Text(t))) => {
+                                        if let Ok(v) = serde_json::from_str::<Value>(&t) {
+                                            if tx_read.send(v).await.is_err() {
+                                                break;
+                                            }
+                                        }
                                     }
+                                    Some(Ok(_)) => {} // 协议帧（Ping/Pong/Binary），忽略
+                                    _ => break,      // 关闭或错误
                                 }
                             }
                         });
