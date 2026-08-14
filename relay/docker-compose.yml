@@ -1,6 +1,13 @@
 services:
   ocrelay:
-    build: .
+    build:
+      context: .
+      args:
+        # 国内镜像仓基础镜像（.env 里可覆盖），如 PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.12-slim
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+        # 国内 PyPI 镜像（.env 里可覆盖）
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+    image: opencode-relay:latest
     container_name: ocrelay
     restart: always
     ports:

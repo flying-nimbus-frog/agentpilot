@@ -19,7 +19,7 @@ RELAY_PORT=8080 .venv/bin/python main.py
 ## 生产部署（Docker Compose，推荐）
 
 ```bash
-# 首次（含克隆代码 + 生成密钥 + 拉起）
+# 首次（含克隆代码 + 生成密钥 + 拉起，依赖走国内镜像）
 git clone https://gitee.com/sep20210917/opencode-phone-prototype.git && cd opencode-phone-prototype/relay && echo "RELAY_JWT_SECRET=$(openssl rand -hex 32)" > .env && docker compose up -d --build
 
 # 之后重启/更新
@@ -32,6 +32,25 @@ docker compose ps && curl http://localhost:8010/health
 - 宿主端口默认 **8010**（8080 可能被占用），可用环境变量改：`RELAY_PORT=9000 docker compose up -d`
 - 数据（SQLite）持久化在 Docker 卷 `ocrelay-data`
 - `RELAY_JWT_SECRET` 从 `.env` 读取，必须设置（启动前未设置会直接报错，防止默认密钥上线）
+- **国内加速已内置**：pip 依赖默认走清华源 `pypi.tuna.tsinghua.edu.cn`（`.env` 里加 `PIP_INDEX_URL=` 可覆盖）；基础镜像可用 `PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.12-slim` 覆盖
+
+### 基础镜像拉取太慢？配置 Docker 国内镜像仓库（服务器一次性）
+
+```bash
+sudo mkdir -p /etc/docker
+sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
+{
+  "registry-mirrors": [
+    "https://docker.m.daocloud.io",
+    "https://docker.1panel.live",
+    "https://hub.rat.dev"
+  ]
+}
+EOF
+sudo systemctl restart docker
+```
+
+配置后重新 `docker compose up -d --build`，基础镜像 `python:3.12-slim` 会从国内镜像仓秒拉。
 
 ## 生产部署（Docker 单容器）
 
