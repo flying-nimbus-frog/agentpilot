@@ -23,6 +23,15 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    networks:
+      - default
+      - zhile
+
+networks:
+  default:
+  zhile:
+    external: true
+    name: license_server_default
 
 volumes:
   ocrelay-data:
