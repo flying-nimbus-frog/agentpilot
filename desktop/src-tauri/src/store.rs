@@ -17,6 +17,12 @@ pub struct Settings {
     pub agent_port: u16,
     #[serde(default)]
     pub permission: Option<String>,
+    #[serde(default)]
+    pub api_base: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub model: String,
 }
 
 impl Settings {

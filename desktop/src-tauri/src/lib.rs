@@ -1,17 +1,18 @@
 mod agent;
+mod agent_llm;
 mod engine;
 mod relay;
 mod store;
 
+
 use crate::store::{Settings, Store};
 use serde_json::json;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
 
 struct AppState {
     store: Arc<Store>,
-    agent: Arc<Mutex<agent::OpenCodeAgent>>,
+    mini: Arc<agent_llm::MiniAgent>,
 }
 
 fn app_config_path(app: &AppHandle) -> std::path::PathBuf {
@@ -53,7 +54,7 @@ async fn account_login(
         cfg.email = email.clone();
         cfg.token = resp.token.clone();
     });
-    engine::emit_status(&app, &state.store, &state.agent, false).await;
+    engine::emit_status(&app, &state.store, &state.mini, false).await;
     Ok(resp.user)
 }
 
@@ -72,7 +73,7 @@ async fn account_register(
         cfg.email = email.clone();
         cfg.token = resp.token.clone();
     });
-    engine::emit_status(&app, &state.store, &state.agent, false).await;
+    engine::emit_status(&app, &state.store, &state.mini, false).await;
     Ok(resp.user)
 }
 
@@ -98,7 +99,7 @@ async fn device_register(
     });
     engine::log_event(&app, format!("📱 待配对设备已创建，配对码 {:.6}（{:.6} 秒有效）",
         resp.pairing_code, resp.expires_in));
-    engine::emit_status(&app, &state.store, &state.agent, false).await;
+    engine::emit_status(&app, &state.store, &state.mini, false).await;
     Ok(json!({
         "pairingCode": resp.pairing_code,
         "expiresIn": resp.expires_in,
@@ -134,49 +135,54 @@ async fn device_unbind(app: AppHandle, state: State<'_, AppState>) -> Result<(),
         cfg.pending_id.clear();
         cfg.pending_token.clear();
     });
-    engine::emit_status(&app, &state.store, &state.agent, false).await;
+    engine::emit_status(&app, &state.store, &state.mini, false).await;
     Ok(())
 }
 
-// ---------- Agent ----------
+// ---------- Agent（内置 MiniAgent，直连模型） ----------
 
 #[tauri::command]
 async fn agent_detect(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
-    let mut a = state.agent.lock().await;
     Ok(json!({
-        "path": agent::detect(),
-        "running": a.running(),
-        "port": a.port,
+        "type": "mini-agent",
+        "model": state.mini.model_name(),
+        "configured": state.mini.configured(),
     }))
 }
 
 #[tauri::command]
 async fn agent_start(
-    dir: String,
-    permission: Option<String>,
+    api_base: String,
+    api_key: String,
+    model: String,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
-    let mut a = state.agent.lock().await;
-    a.start(&dir, permission.as_deref()).await?;
+    state.mini.configure(&api_base, &api_key, &model);
     state.store.update(|cfg| {
-        cfg.agent_dir = dir;
-        if let Some(p) = permission {
-            cfg.permission = Some(p);
-        }
+        cfg.api_base = api_base;
+        cfg.api_key = api_key;
+        cfg.model = model;
     });
-    let version = a.version().await;
-    engine::log_event(&app, format!("🤖 Agent 已启动 (opencode {})", version.as_deref().unwrap_or("?")));
-    engine::emit_status(&app, &state.store, &state.agent, false).await;
-    Ok(json!({"version": version}))
+    if !state.mini.configured() {
+        return Err("请先填写 API Key".into());
+    }
+    engine::log_event(
+        &app,
+        format!("🤖 MiniAgent 已就绪 (model: {})", state.mini.model_name()),
+    );
+    engine::emit_status(&app, &state.store, &state.mini, false).await;
+    Ok(json!({"model": state.mini.model_name()}))
 }
 
 #[tauri::command]
 async fn agent_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    let mut a = state.agent.lock().await;
-    a.stop().await;
-    engine::log_event(&app, "🛑 Agent 已停止");
-    engine::emit_status(&app, &state.store, &state.agent, false).await;
+    state.mini.configure("", "", "");
+    state.store.update(|cfg| {
+        cfg.api_key.clear();
+    });
+    engine::log_event(&app, "🛑 MiniAgent 已停止");
+    engine::emit_status(&app, &state.store, &state.mini, false).await;
     Ok(())
 }
 
@@ -185,13 +191,12 @@ async fn agent_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), St
 #[tauri::command]
 async fn engine_status(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let s = state.store.get();
-    let mut a = state.agent.lock().await;
     Ok(json!({
         "paired": s.paired(),
         "pending": !s.pending_token.is_empty(),
         "loggedIn": !s.token.is_empty(),
-        "agentRunning": a.running(),
-        "agentPath": agent::detect(),
+        "agentRunning": state.mini.configured(),
+        "agentModel": state.mini.model_name(),
     }))
 }
 
@@ -205,20 +210,19 @@ pub fn run() {
             let handle = app.handle().clone();
             let path = app_config_path(&handle);
             let store = Arc::new(Store::load(path));
-            let port = store.get().agent_port;
-            let agent = Arc::new(Mutex::new(agent::OpenCodeAgent::new(
-                if port == 0 { 4097 } else { port },
-            )));
+            let mini = agent_llm::MiniAgent::new();
+            // 恢复已保存的模型配置
+            let s0 = store.get();
+            mini.configure(&s0.api_base, &s0.api_key, &s0.model);
             app.manage(AppState {
                 store: Arc::clone(&store),
-                agent: Arc::clone(&agent),
+                mini: Arc::clone(&mini),
             });
             // 后台引擎
             let app2 = handle.clone();
             let store2 = Arc::clone(&store);
-            let agent2 = Arc::clone(&agent);
             tauri::async_runtime::spawn(async move {
-                engine::run(app2, store2, agent2).await;
+                engine::run(app2, store2, mini).await;
             });
             Ok(())
         })

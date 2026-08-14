@@ -65,12 +65,14 @@
     <!-- ============ Agent ============ -->
     <section id="pane-agent" class="pane">
       <div class="card">
-        <h3>Agent（opencode）</h3>
+        <h3>Agent（内置 MiniAgent · 直连模型）</h3>
         <p id="agent-detect" class="msg">检测中…</p>
-        <label>工作目录</label>
-        <input id="in-agent-dir" placeholder="/Users/you/projects" />
-        <label>权限配置（可选，JSON）</label>
-        <textarea id="in-permission" rows="3" placeholder='{"bash":"ask"}'></textarea>
+        <label>API 地址</label>
+        <input id="in-api-base" placeholder="https://api.deepseek.com" />
+        <label>API Key</label>
+        <input id="in-api-key" type="password" placeholder="sk-..." />
+        <label>模型</label>
+        <input id="in-model" placeholder="deepseek-v4-flash" />
         <div class="btns">
           <button id="btn-agent-start" class="primary">启动 Agent</button>
           <button id="btn-agent-stop" class="danger">停止 Agent</button>

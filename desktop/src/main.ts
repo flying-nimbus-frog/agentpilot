@@ -4,7 +4,13 @@ import { listen } from "@tauri-apps/api/event";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 // ---------- 状态 ----------
-let st = { paired: false, pending: false, loggedIn: false, agentRunning: false };
+let st: Record<string, boolean | string> = {
+  paired: false,
+  pending: false,
+  loggedIn: false,
+  agentRunning: false,
+  agentModel: "",
+};
 
 function setChip(el: HTMLElement, text: string, kind: "green" | "gray" | "orange" | "red") {
   el.textContent = text;
@@ -18,7 +24,11 @@ function refreshStatus() {
     st.paired ? "设备 已配对" : st.pending ? "设备 待配对" : st.loggedIn ? "设备 未绑定" : "设备 未登录",
     st.paired ? "green" : st.pending ? "orange" : "gray",
   );
-  setChip($("st-agent"), st.agentRunning ? "Agent 运行中" : "Agent 已停止", st.agentRunning ? "green" : "gray");
+  setChip(
+    $("st-agent"),
+    st.agentRunning ? `Agent 运行中 (${st.agentModel || ""})` : "Agent 已停止",
+    st.agentRunning ? "green" : "gray",
+  );
   const btn = $("btn-device-register") as HTMLButtonElement;
   btn.disabled = !st.loggedIn;
   $("btn-device-unbind").classList.toggle("hidden", !st.paired && !st.pending);
@@ -30,6 +40,11 @@ function refreshStatus() {
       : st.pending
         ? "⏳ 等待手机确认配对…"
         : "已登录，尚未绑定设备";
+  const startBtn = $("btn-agent-start") as HTMLButtonElement;
+  startBtn.disabled = !!st.agentRunning;
+  startBtn.textContent = st.agentRunning ? "Agent 运行中…" : "启动 Agent";
+  const stopBtn = $("btn-agent-stop") as HTMLButtonElement;
+  stopBtn.disabled = !st.agentRunning;
 }
 
 // ---------- 日志 ----------
@@ -54,9 +69,9 @@ $("tab-log").onclick = () => switchTab("log");
 $("btn-login").onclick = async () => {
   try {
     const user = await invoke("account_login", {
-      relayUrl: $("in-relay").value,
-      email: $("in-email").value,
-      password: $("in-pass").value,
+      relayUrl: ($("in-relay") as HTMLInputElement).value,
+      email: ($("in-email") as HTMLInputElement).value,
+      password: ($("in-pass") as HTMLInputElement).value,
     });
     st.loggedIn = true;
     $("account-msg").textContent = `✅ 已登录 ${(user as any).email}`;
@@ -69,9 +84,9 @@ $("btn-login").onclick = async () => {
 $("btn-register").onclick = async () => {
   try {
     const user = await invoke("account_register", {
-      relayUrl: $("in-relay").value,
-      email: $("in-email").value,
-      password: $("in-pass").value,
+      relayUrl: ($("in-relay") as HTMLInputElement).value,
+      email: ($("in-email") as HTMLInputElement).value,
+      password: ($("in-pass") as HTMLInputElement).value,
     });
     st.loggedIn = true;
     $("account-msg").textContent = `✅ 已注册并登录 ${(user as any).email}`;
@@ -99,22 +114,35 @@ $("btn-device-unbind").onclick = async () => {
 };
 
 $("btn-agent-start").onclick = async () => {
+  const apiBase = ($("in-api-base") as HTMLInputElement).value.trim();
+  const apiKey = ($("in-api-key") as HTMLInputElement).value.trim();
+  const model = ($("in-model") as HTMLInputElement).value.trim();
+  if (!apiKey) {
+    $("agent-msg").textContent = "❌ 请先填写 API Key";
+    $("agent-msg").style.color = "#cf222e";
+    return;
+  }
   try {
-    const r = (await invoke("agent_start", {
-      dir: ($("in-agent-dir") as HTMLInputElement).value,
-      permission: ($("in-permission") as HTMLInputElement).value || null,
-    })) as { version: string | null };
-    $("agent-msg").textContent = `✅ Agent 已启动 (opencode ${r.version ?? "?"})`;
+    $("agent-msg").textContent = "⏳ 正在启动…";
+    const r = (await invoke("agent_start", { apiBase, apiKey, model })) as { model: string };
+    st.agentRunning = true;
+    st.agentModel = r.model;
+    $("agent-msg").textContent = `✅ 启动成功！模型: ${r.model}`;
+    $("agent-msg").style.color = "#1a7f37";
     refreshStatus();
   } catch (e) {
-    $("agent-msg").textContent = `❌ ${e}`;
+    $("agent-msg").textContent = `❌ 启动失败: ${e}`;
+    $("agent-msg").style.color = "#cf222e";
   }
 };
 
 $("btn-agent-stop").onclick = async () => {
   try {
     await invoke("agent_stop");
-    $("agent-msg").textContent = "🛑 Agent 已停止";
+    st.agentRunning = false;
+    st.agentModel = "";
+    $("agent-msg").textContent = "🛑 已停止";
+    $("agent-msg").style.color = "#57606a";
     refreshStatus();
   } catch (e) {
     $("agent-msg").textContent = `❌ ${e}`;
@@ -125,8 +153,7 @@ $("btn-agent-stop").onclick = async () => {
 async function init() {
   listen<string>("log", (e) => logLine(e.payload));
   listen("engine-status", (e) => {
-    const s = e.payload as typeof st;
-    st = { ...st, ...s };
+    st = { ...st, ...(e.payload as Record<string, boolean | string>) };
     refreshStatus();
   });
 
@@ -134,22 +161,21 @@ async function init() {
     const settings = (await invoke("settings_get")) as any;
     if (settings.relay_url) ($("in-relay") as HTMLInputElement).value = settings.relay_url;
     if (settings.email) ($("in-email") as HTMLInputElement).value = settings.email;
-    if (settings.agent_dir) ($("in-agent-dir") as HTMLInputElement).value = settings.agent_dir;
-    if (settings.permission) ($("in-permission") as HTMLInputElement).value = settings.permission;    const s = (await invoke("engine_status")) as typeof st;
-    st = s;
+    if (settings.api_base) ($("in-api-base") as HTMLInputElement).value = settings.api_base;
+    if (settings.api_key) ($("in-api-key") as HTMLInputElement).value = settings.api_key;
+    if (settings.model) ($("in-model") as HTMLInputElement).value = settings.model;
+    const s = (await invoke("engine_status")) as typeof st;
+    st = { ...st, ...s };
     refreshStatus();
   } catch (e) {
     logLine(`初始化失败: ${e}`);
   }
 
   try {
-    const d = (await invoke("agent_detect")) as { path: string | null; running: boolean };
-    $("agent-detect").textContent = d.path
-      ? `✅ 已检测到 opencode: ${d.path}`
-      : "❌ 未找到 opencode（安装: bun install -g opencode-ai）";
-    if (d.path && !($("in-agent-dir") as HTMLInputElement).value) {
-      ($("in-agent-dir") as HTMLInputElement).value = ".";
-    }
+    const d = (await invoke("agent_detect")) as { type: string; model: string; configured: boolean };
+    $("agent-detect").textContent = d.configured
+      ? `✅ 已配置 (model: ${d.model})`
+      : `ℹ️ 内置 ${d.type}，填写 API Key 后点「启动 Agent」`;
   } catch (e) {
     $("agent-detect").textContent = `❌ ${e}`;
   }
