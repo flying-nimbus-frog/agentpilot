@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../api/protocol.dart';
 import '../api/relay.dart';
+import '../store/session_store.dart';
+import 'login_screen.dart';
 import 'sessions_screen.dart';
 
 class DevicesScreen extends StatefulWidget {
@@ -48,6 +50,31 @@ class _DevicesScreenState extends State<DevicesScreen> {
     }
   }
 
+  Future<void> _logout() async {
+    await widget.app.close();
+    await SessionStore.clear();
+    if (!mounted) return;
+    final nav = Navigator.of(context);
+    await nav.pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => LoginScreen(
+          savedUrl: widget.app.relayUrl,
+          onLoggedIn: (app) async {
+            await SessionStore.save(app.relayUrl, app.token, app.email);
+            await app.fetchDevices();
+            await app.connect();
+            if (!nav.mounted) return;
+            await nav.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => DevicesScreen(app: app)),
+              (_) => false,
+            );
+          },
+        ),
+      ),
+      (_) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -65,6 +92,11 @@ class _DevicesScreenState extends State<DevicesScreen> {
                 Text(_connState, style: const TextStyle(fontSize: 12)),
               ]),
             ),
+          ),
+          IconButton(
+            tooltip: '退出登录',
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
           ),
         ],
       ),
