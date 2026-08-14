@@ -31,6 +31,7 @@ pub async fn run(app: AppHandle, store: Arc<Store>, agent: Arc<Mutex<OpenCodeAge
     let mut ws_reader: Option<mpsc::Receiver<Value>> = None;
     let mut agent_rx: Option<mpsc::UnboundedReceiver<Value>> = None;
     let mut sse_task: Option<tokio::task::JoinHandle<()>> = None;
+    let mut ping_interval: Option<tokio::time::Interval> = None;
     loop {
         let s = store.get();
         let base = s.http_base();
@@ -62,7 +63,7 @@ pub async fn run(app: AppHandle, store: Arc<Store>, agent: Arc<Mutex<OpenCodeAge
                     }
                 }
             }
-            emit_status(&app, &store, &agent, false);
+            emit_status(&app, &store, &agent, false).await;
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             continue;
         }
@@ -116,6 +117,7 @@ pub async fn run(app: AppHandle, store: Arc<Store>, agent: Arc<Mutex<OpenCodeAge
                             }
                         });
                         ws_reader = Some(rx_read);
+                        ping_interval = Some(tokio::time::interval(std::time::Duration::from_secs(25)));
                         log_event(&app, "🟢 已连接中继");
                         emit_status(&app, &store, &agent, true);
                     }
@@ -160,7 +162,8 @@ pub async fn run(app: AppHandle, store: Arc<Store>, agent: Arc<Mutex<OpenCodeAge
                 log_event(&app, "🔌 中继连接断开，重连中…");
                 ws_sink = None;
                 ws_reader = None;
-                emit_status(&app, &store, &agent, false);
+                ping_interval = None;
+                emit_status(&app, &store, &agent, false).await;
             }
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             continue;
