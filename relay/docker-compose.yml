@@ -18,6 +18,8 @@ services:
     environment:
       RELAY_JWT_SECRET: ${RELAY_JWT_SECRET:?请在 .env 中设置 RELAY_JWT_SECRET}
       RELAY_DB: /data/relay.db
+      # Web/浏览器调试需要 CORS（原生手机 App 不受影响，可设 RELAY_CORS=0 关闭）
+      RELAY_CORS: ${RELAY_CORS:-1}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
