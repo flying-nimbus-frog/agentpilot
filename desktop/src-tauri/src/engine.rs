@@ -91,8 +91,10 @@ pub async fn run(app: AppHandle, store: Arc<Store>, agent: Arc<Mutex<OpenCodeAge
                     while rx.try_recv().is_ok() {}
                 }
                 let url = format!("{}/ws/device?token={}", s.ws_base(), s.device_token);
+                eprintln!("[engine] 尝试连接中继: {}", &url[..60.min(url.len())]);
                 match tokio_tungstenite::connect_async(&url).await {
                     Ok((sock, _)) => {
+                        eprintln!("[engine] WS 已建立");
                         let (sink, stream) = sock.split();
                         ws_sink = Some(sink);
                         // 读循环：中继 → 通道（忽略 Ping/Pong 等协议帧，仅 Text 转发）
@@ -118,8 +120,9 @@ pub async fn run(app: AppHandle, store: Arc<Store>, agent: Arc<Mutex<OpenCodeAge
                         emit_status(&app, &store, &agent, true);
                     }
                     Err(e) => {
+                        eprintln!("[engine] WS 连接失败: {e}");
                         log_event(&app, format!("🔴 中继连接失败: {e}"));
-                        emit_status(&app, &store, &agent, false);
+                        emit_status(&app, &store, &agent, false).await;
                         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                         continue;
                     }

@@ -37,9 +37,14 @@ class Hub:
             {"type": "device.online", "deviceID": device_id, "online": True},
         )
 
-    async def device_disconnect(self, device_id: str) -> None:
+    async def device_disconnect(self, device_id: str, ws=None) -> None:
+        """断开时只移除"自己"的注册，避免旧连接清理误伤新连接。"""
         async with self._lock:
-            entry = self._devices.pop(device_id, None)
+            entry = self._devices.get(device_id)
+            if entry and (ws is None or entry["ws"] is ws):
+                self._devices.pop(device_id, None)
+            else:
+                entry = None
         if entry:
             await self.broadcast(
                 entry["user_id"],

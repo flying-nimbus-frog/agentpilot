@@ -311,7 +311,7 @@ async def ws_device(ws: WebSocket):
     except WebSocketDisconnect:
         pass
     finally:
-        await hub.device_disconnect(device["id"])
+        await hub.device_disconnect(device["id"], ws)
         log.info("device offline: %s", device["id"])
 
 
