@@ -167,7 +167,7 @@ pub async fn run(
                 ping_interval = None;
                 emit_status(&app, &store, &mini, false).await;
             }
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            // 无睡眠：select! 本身会挂起等待事件，保证流式事件零节流
             continue;
         }
 
