@@ -107,7 +107,9 @@ async def relay_loop(conf: cfg.Config, client: OpenCodeClient):
     backoff = 1
     while True:
         try:
-            async with websockets.connect(url, ping_interval=20, ping_timeout=40) as ws:
+            async with websockets.connect(
+                url, ping_interval=20, ping_timeout=40, open_timeout=30
+            ) as ws:
                 backoff = 1
                 log(f"已连接中继: {conf.relay_url}")
                 # 事件转发任务

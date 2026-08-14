@@ -99,6 +99,16 @@ def api_devices_register(body: DeviceIn, authorization: str | None = Header(None
     return {"deviceID": dev["id"], "deviceToken": dev["token"]}
 
 
+@app.delete("/api/devices/{device_id}")
+async def api_devices_delete(device_id: str, authorization: str | None = Header(None)):
+    user = _require_user(authorization)
+    if hub.is_device_online(device_id):
+        raise HTTPException(400, "设备在线，请先断开")
+    if not db.delete_device(user["id"], device_id):
+        raise HTTPException(404, "设备不存在")
+    return {"ok": True}
+
+
 # ---------- WebSocket 助手 ----------
 
 async def ws_recv(ws: WebSocket):

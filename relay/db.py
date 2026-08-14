@@ -101,3 +101,11 @@ def touch_device(device_id: str, version: str | None = None) -> None:
             "UPDATE devices SET last_seen=?, version=COALESCE(?, version) WHERE id=?",
             (int(time.time() * 1000), version, device_id),
         )
+
+
+def delete_device(user_id: str, device_id: str) -> bool:
+    with _conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM devices WHERE id=? AND user_id=?", (device_id, user_id)
+        )
+        return cur.rowcount > 0
