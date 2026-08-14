@@ -40,14 +40,47 @@ Header: Authorization: Bearer <jwt>
     "lastSeen": 1786683815667, "version": "1.18.18" } ] }
 ```
 
-### 2.4 设备注册（电脑端伴侣）
+### 2.4 设备注册（电脑端伴侣，含配对码）
 
 ```
 POST /api/devices
 Header: Authorization: Bearer <jwt>
 Body: { "name": "MacBook Air" }
-200 → { "deviceID": "dev_xxx", "deviceToken": "dt_xxxxxxxx" }
+200 → { "pendingID": "dev_xxx", "pendingToken": "pt_xxx",
+        "pairingCode": "265890", "expiresIn": 600 }
 ```
+
+设备不直接激活，需手机确认配对：
+
+```
+GET /api/devices/:id/status?token=<pendingToken>      # 电脑端轮询(每3s)
+200 → { "status": "pending" } | { "status": "active", "deviceToken": "dt_xxx" }
+
+POST /api/devices/:id/pair                            # 手机端确认
+Header: Authorization: Bearer <jwt>
+Body: { "code": "265890" }
+200 → { "deviceID": "dev_xxx", "deviceToken": "dt_xxx" }
+401 → 配对码错误
+410 → 已过期（10 分钟）| 404 → 不存在
+```
+
+配对码 10 分钟有效；设备列表返回 `status: pending|active`，App 对 pending 设备展示"配对"入口。
+
+### 2.5 设备管理
+
+```
+GET    /api/devices            # 列表（含 status）
+DELETE /api/devices/:id        # 删除离线设备（400 若在线）
+```
+
+### 2.6 限流
+
+| 接口 | 限制 |
+|------|------|
+| POST /api/register | 5 次/小时/IP |
+| POST /api/login | 10 次/分钟/IP（成功后重置） |
+| POST /api/devices/:id/pair | 5 次/分钟/IP |
+| 全局兜底 | 600 次/分钟/IP |
 
 ## 3. WebSocket 通道
 
