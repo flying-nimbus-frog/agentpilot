@@ -9,13 +9,18 @@ pub struct LoginResp {
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterDeviceResp {
+    #[serde(rename = "pendingID")]
     pub pending_id: String,
+    #[serde(rename = "pendingToken")]
     pub pending_token: String,
+    #[serde(rename = "pairingCode")]
     pub pairing_code: String,
+    #[serde(rename = "expiresIn")]
     pub expires_in: u64,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PairStatus {
     pub status: String,
     #[serde(default)]

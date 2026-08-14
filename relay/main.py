@@ -144,15 +144,38 @@ def api_devices_status(device_id: str, token: str):
     """电脑端轮询配对状态（用 pendingToken）。激活后返回正式 deviceToken。"""
     dev = db.get_pending_device_by_token(token)
     if not dev or dev["id"] != device_id:
-        raise HTTPException(404, "配对请求不存在或已失效")
+        raise HTTPException(404, "配对请求不存在")
     now = int(time.time() * 1000)
     if dev["status"] == "pending":
         if now > dev["pairing_expires"]:
             db.delete_device(dev["user_id"], device_id)
-            raise HTTPException(410, "配对码已过期，请重新登录注册设备")
+            raise HTTPException(410, "配对码已过期，请电脑端重新登录注册")
         return {"status": "pending"}
     # 已激活：返回正式令牌（pendingToken 校验通过后返回一次）
     return {"status": "active", "deviceToken": dev["token"]}
+
+
+@app.post("/api/devices/pair")
+def api_devices_pair_by_code(
+    body: PairIn, authorization: str | None = Header(None), request: Request = None
+):
+    """手机端确认配对（按配对码匹配，无需指定设备ID）。"""
+    _check_ratelimit(request, rl_pair, "配对")
+    user = _require_user(authorization)
+    code = body.code.strip()
+    devs = db.list_pending_devices(user["id"])
+    now = int(time.time() * 1000)
+    for dev in devs:
+        if dev["pairing_code"] == code:
+            if now > dev["pairing_expires"]:
+                db.delete_device(user["id"], dev["id"])
+                raise HTTPException(410, "配对码已过期，请电脑端重新注册")
+            result = db.activate_pending_device(dev["id"], user["id"])
+            if not result:
+                raise HTTPException(409, "设备状态异常")
+            log.info("device paired by code: %s (%s)", dev["id"], dev["name"])
+            return result
+    raise HTTPException(401, "配对码错误")
 
 
 @app.post("/api/devices/{device_id}/pair")

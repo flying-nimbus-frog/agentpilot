@@ -113,7 +113,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     );
     if (code == null || code.isEmpty) return;
     try {
-      await widget.app.pairDevice(d.id, code);
+      await widget.app.pairDevice(code);
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('✅ 配对成功')));

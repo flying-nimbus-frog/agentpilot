@@ -93,12 +93,14 @@ async fn device_register(
     let resp =
         relay::register_device(&s.http_base(), &s.token, &format!("{hostname} ({})", s.email)).await?;
     state.store.update(|cfg| {
-        cfg.device_id = resp.pending_id.clone();
-        cfg.pending_token = resp.pending_token.clone();
+        cfg.device_id.clear();
         cfg.device_token.clear();
+        cfg.pending_id = resp.pending_id.clone();
+        cfg.pending_token = resp.pending_token.clone();
     });
     engine::log_event(&app, format!("📱 待配对设备已创建，配对码 {:.6}（{:.6} 秒有效）",
         resp.pairing_code, resp.expires_in));
+    engine::emit_status(&app, &state.store, &state.agent, false).await;
     Ok(json!({
         "pairingCode": resp.pairing_code,
         "expiresIn": resp.expires_in,

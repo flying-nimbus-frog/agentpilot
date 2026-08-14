@@ -130,6 +130,14 @@ def get_pending_device(device_id: str, user_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+def list_pending_devices(user_id: str) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM devices WHERE user_id=? AND status='pending'", (user_id,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def list_devices(user_id: str) -> list[dict]:
     with _conn() as conn:
         rows = conn.execute(

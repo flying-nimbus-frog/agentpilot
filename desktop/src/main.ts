@@ -54,10 +54,11 @@ $("tab-log").onclick = () => switchTab("log");
 $("btn-login").onclick = async () => {
   try {
     const user = await invoke("account_login", {
-      relayUrl: ($("in-relay") as HTMLInputElement).value,
-      email: ($("in-email") as HTMLInputElement).value,
-      password: ($("in-pass") as HTMLInputElement).value,
+      relayUrl: $("in-relay").value,
+      email: $("in-email").value,
+      password: $("in-pass").value,
     });
+    st.loggedIn = true;
     $("account-msg").textContent = `✅ 已登录 ${(user as any).email}`;
     refreshStatus();
   } catch (e) {
@@ -68,10 +69,11 @@ $("btn-login").onclick = async () => {
 $("btn-register").onclick = async () => {
   try {
     const user = await invoke("account_register", {
-      relayUrl: ($("in-relay") as HTMLInputElement).value,
-      email: ($("in-email") as HTMLInputElement).value,
-      password: ($("in-pass") as HTMLInputElement).value,
+      relayUrl: $("in-relay").value,
+      email: $("in-email").value,
+      password: $("in-pass").value,
     });
+    st.loggedIn = true;
     $("account-msg").textContent = `✅ 已注册并登录 ${(user as any).email}`;
     refreshStatus();
   } catch (e) {
@@ -82,6 +84,7 @@ $("btn-register").onclick = async () => {
 $("btn-device-register").onclick = async () => {
   try {
     const r = (await invoke("device_register")) as { pairingCode: string; expiresIn: number };
+    st.pending = true;
     $("pairing-code").textContent = r.pairingCode.split("").join(" ");
     $("device-msg").textContent = `配对码 ${r.expiresIn} 秒内有效，请在手机 App 中输入`;
     refreshStatus();

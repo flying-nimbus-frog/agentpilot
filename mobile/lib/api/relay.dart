@@ -101,10 +101,10 @@ class RelayApp {
     return devices;
   }
 
-  /// 手机端确认配对：输入桌面端显示的 6 位配对码。
-  Future<void> pairDevice(String deviceId, String code) async {
+  /// 手机端确认配对：输入桌面端显示的 6 位配对码（按码匹配，无需指定设备）。
+  Future<void> pairDevice(String code) async {
     final res = await http.post(
-      Uri.parse('$_httpBase/api/devices/$deviceId/pair'),
+      Uri.parse('$_httpBase/api/devices/pair'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
@@ -112,7 +112,7 @@ class RelayApp {
       body: jsonEncode({'code': code}),
     ).timeout(const Duration(seconds: 15));
     if (res.statusCode == 401) throw ApiError('配对码错误，请检查后重试');
-    if (res.statusCode == 410) throw ApiError('配对码已过期，请在电脑端重新登录注册');
+    if (res.statusCode == 410) throw ApiError('配对码已过期，请在电脑端重新注册');
     if (res.statusCode != 200) {
       throw ApiError('配对失败 HTTP ${res.statusCode}');
     }

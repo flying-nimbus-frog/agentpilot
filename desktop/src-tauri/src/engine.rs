@@ -50,16 +50,14 @@ pub async fn run(app: AppHandle, store: Arc<Store>, agent: Arc<Mutex<OpenCodeAge
                             });
                         }
                     }
-                    Ok(_) => log_event(&app, "⏳ 等待手机确认配对…"),
+                    Ok(_) => {}
                     Err(e) => {
-                        if e.contains("过期") || e.contains("失效") {
-                            log_event(&app, format!("⚠️ 配对已失效: {e}，请重新注册设备"));
+                        if e.contains("过期") {
+                            log_event(&app, format!("⚠️ 配对码已过期: {e}，请重新注册设备"));
                             store.update(|cfg| {
                                 cfg.pending_id.clear();
                                 cfg.pending_token.clear();
                             });
-                        } else {
-                            log_event(&app, format!("⏳ 等待手机确认配对… ({e})"));
                         }
                     }
                 }
@@ -248,7 +246,9 @@ pub async fn emit_status(
     let _ = app.emit(
         "engine-status",
         json!({
+            "loggedIn": !s.token.is_empty(),
             "paired": s.paired(),
+            "pending": !s.pending_token.is_empty(),
             "online": online,
             "agentRunning": a.running(),
             "agentPath": crate::agent::detect(),
