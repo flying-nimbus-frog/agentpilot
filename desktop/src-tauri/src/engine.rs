@@ -1,21 +1,54 @@
+use crate::agent::OpenCodeAgent;
 use crate::agent_llm::MiniAgent;
 use crate::relay;
 use crate::store::Store;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use std::future::Future;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
+pub const MODE_MINI: u8 = 0;
+pub const MODE_OPENCODE: u8 = 1;
+
 type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type WsSink = futures_util::stream::SplitSink<WsStream, WsMessage>;
 
 pub fn log_event(app: &AppHandle, line: impl AsRef<str>) {
-    let _ = app.emit("log", line.as_ref().to_string());
+    let line = line.as_ref().to_string();
+    // 落盘日志（应用数据目录）
+    if let Ok(dir) = app.path().app_log_dir() {
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("opencode-remote.log");
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            let _ = writeln!(
+                f,
+                "{} {line}",
+                chrono_like_now()
+            );
+        }
+    }
+    let _ = app.emit("log", line);
+}
+
+/// 简易时间戳（不引入 chrono 依赖）
+fn chrono_like_now() -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = now.as_secs() as i64;
+    let (h, m, s) = ((secs % 86400) / 3600, (secs % 3600) / 60, secs % 60);
+    format!("{:02}:{:02}:{:02}", h + 8, m, s)
 }
 
 fn now_secs() -> u64 {
@@ -29,10 +62,13 @@ pub async fn run(
     app: AppHandle,
     store: Arc<Store>,
     mini: Arc<MiniAgent>,
+    opencode: Arc<Mutex<OpenCodeAgent>>,
+    mode: Arc<AtomicU8>,
 ) {
-    // agent 事件通道（MiniAgent 流式输出 → 中继）
+    // agent 事件通道（MiniAgent/opencode SSE → 中继）
     let (agent_tx, agent_rx0) = mpsc::unbounded_channel::<Value>();
     let mut agent_rx: Option<mpsc::UnboundedReceiver<Value>> = Some(agent_rx0);
+    let mut sse_fwd: Option<tokio::task::JoinHandle<()>> = None;
     let mut last_pair_poll = 0u64;
     let mut ws_sink: Option<WsSink> = None;
     let mut ws_reader: Option<mpsc::Receiver<Value>> = None;
@@ -40,6 +76,27 @@ pub async fn run(
     loop {
         let s = store.get();
         let base = s.http_base();
+
+        // ---------- opencode 模式的 SSE 事件转发 ----------
+        if mode.load(Ordering::Relaxed) == MODE_OPENCODE && sse_fwd.is_none() {
+            let agent_c = Arc::clone(&opencode);
+            let tx = agent_tx.clone();
+            sse_fwd = Some(tokio::spawn(async move {
+                loop {
+                    let (port, password) = {
+                        let a = agent_c.lock().await;
+                        (a.port, a.password().to_string())
+                    };
+                    OpenCodeAgent::stream_events(port, password, tx.clone()).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                }
+            }));
+        }
+        if mode.load(Ordering::Relaxed) != MODE_OPENCODE {
+            if let Some(t) = sse_fwd.take() {
+                t.abort();
+            }
+        }
 
         // ---------- 配对阶段 ----------
         if !s.paired() && !s.pending_token.is_empty() && !s.pending_id.is_empty() {
@@ -68,7 +125,7 @@ pub async fn run(
                     }
                 }
             }
-            emit_status(&app, &store, &mini, false).await;
+            emit_status(&app, &store, &mini, &opencode, &mode, false).await;
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             continue;
         }
@@ -108,12 +165,12 @@ pub async fn run(
                         ws_reader = Some(rx_read);
                         ping_interval = Some(tokio::time::interval(std::time::Duration::from_secs(25)));
                         log_event(&app, "🟢 已连接中继");
-                        emit_status(&app, &store, &mini, true).await;
+                        emit_status(&app, &store, &mini, &opencode, &mode, true).await;
                     }
                     Err(e) => {
                         eprintln!("[engine] WS 连接失败: {e}");
                         log_event(&app, format!("🔴 中继连接失败: {e}"));
-                        emit_status(&app, &store, &mini, false).await;
+                        emit_status(&app, &store, &mini, &opencode, &mode, false).await;
                         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                         continue;
                     }
@@ -143,7 +200,7 @@ pub async fn run(
                 tokio::select! {
                     msg = recv_relay => {
                         match msg {
-                            Some(v) => handle_relay_msg(&app, sink, &v, &mini, &agent_tx).await,
+                            Some(v) => handle_relay_msg(&app, sink, &v, &mini, &opencode, &mode, &agent_tx).await,
                             None => disconnected = true,
                         }
                     }
@@ -165,7 +222,7 @@ pub async fn run(
                 ws_sink = None;
                 ws_reader = None;
                 ping_interval = None;
-                emit_status(&app, &store, &mini, false).await;
+                emit_status(&app, &store, &mini, &opencode, &mode, false).await;
             }
             // 无睡眠：select! 本身会挂起等待事件，保证流式事件零节流
             continue;
@@ -181,6 +238,8 @@ async fn handle_relay_msg(
     sink: &mut WsSink,
     msg: &Value,
     mini: &Arc<MiniAgent>,
+    opencode: &Arc<Mutex<OpenCodeAgent>>,
+    mode: &Arc<AtomicU8>,
     agent_tx: &mpsc::UnboundedSender<Value>,
 ) {
     let t = msg.get("type").and_then(|v| v.as_str()).unwrap_or("");
@@ -213,6 +272,8 @@ async fn handle_relay_msg(
             );
 
             let mini_c = Arc::clone(mini);
+            let opencode_c = Arc::clone(opencode);
+            let mode_v = mode.load(Ordering::Relaxed);
             let tx = agent_tx.clone();
             let id_task = id.clone();
             let method_task = method.clone();
@@ -220,8 +281,11 @@ async fn handle_relay_msg(
             let start = std::time::Instant::now();
             let reply = tokio::spawn(async move {
                 let id = id_task;
-                let data: Result<Value, String> =
-                    dispatch(mini_c, &method_task, &path_task, body, tx);
+                let data: Result<Value, String> = if mode_v == MODE_OPENCODE {
+                    opencode_request(&opencode_c, &method_task, &path_task, body).await
+                } else {
+                    dispatch(mini_c, &method_task, &path_task, body, tx)
+                };
                 let mut out = json!({"type": "cmd.result", "id": id});
                 match data {
                     Ok(d) => {
@@ -318,9 +382,18 @@ pub async fn emit_status(
     app: &AppHandle,
     store: &Store,
     mini: &MiniAgent,
+    opencode: &Mutex<OpenCodeAgent>,
+    mode: &AtomicU8,
     online: bool,
 ) {
     let s = store.get();
+    let oc_running = opencode.lock().await.running();
+    let m = mode.load(Ordering::Relaxed);
+    let (running, model) = if m == MODE_OPENCODE {
+        (oc_running, "opencode".to_string())
+    } else {
+        (mini.configured(), mini.model_name())
+    };
     let _ = app.emit(
         "engine-status",
         json!({
@@ -328,8 +401,31 @@ pub async fn emit_status(
             "paired": s.paired(),
             "pending": !s.pending_token.is_empty(),
             "online": online,
-            "agentRunning": mini.configured(),
-            "agentModel": mini.model_name(),
+            "agentRunning": running,
+            "agentModel": model,
         }),
     );
+}
+
+/// 指令转发到嵌入的 opencode 引擎
+async fn opencode_request(
+    opencode: &Mutex<OpenCodeAgent>,
+    method: &str,
+    path: &str,
+    body: Option<Value>,
+) -> Result<Value, String> {
+    let mut oc = opencode.lock().await;
+    if !oc.running() {
+        return Err("opencode 未启动".into());
+    }
+    let r = oc.request(method, path, body).await?;
+    if r.get("ok").and_then(|o| o.as_bool()).unwrap_or(false) {
+        Ok(r.get("data").cloned().unwrap_or(Value::Null))
+    } else {
+        Err(r
+            .get("error")
+            .and_then(|e| e.as_str())
+            .unwrap_or("opencode 指令失败")
+            .to_string())
+    }
 }

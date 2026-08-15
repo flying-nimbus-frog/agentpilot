@@ -23,6 +23,8 @@ pub struct Settings {
     pub api_key: String,
     #[serde(default)]
     pub model: String,
+    #[serde(default)]
+    pub agent_mode: String,
 }
 
 impl Settings {

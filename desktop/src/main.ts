@@ -115,21 +115,42 @@ $("btn-device-unbind").onclick = async () => {
   refreshStatus();
 };
 
+function currentAgentMode(): string {
+  const m = document.querySelector('input[name="agent-mode"]:checked') as HTMLInputElement;
+  return m ? m.value : "mini";
+}
+
+for (const r of document.querySelectorAll('input[name="agent-mode"]')) {
+  (r as HTMLInputElement).onchange = () => {
+    const mode = currentAgentMode();
+    $("cfg-mini").classList.toggle("hidden", mode !== "mini");
+    $("cfg-opencode").classList.toggle("hidden", mode !== "opencode");
+  };
+}
+
 $("btn-agent-start").onclick = async () => {
+  const mode = currentAgentMode();
   const apiBase = ($("in-api-base") as HTMLInputElement).value.trim();
   const apiKey = ($("in-api-key") as HTMLInputElement).value.trim();
   const model = ($("in-model") as HTMLInputElement).value.trim();
-  if (!apiKey) {
+  const dir = ($("in-agent-dir") as HTMLInputElement).value.trim();
+  const permission = ($("in-permission") as HTMLInputElement).value.trim() || null;
+  if (mode === "mini" && !apiKey) {
     $("agent-msg").textContent = "❌ 请先填写 API Key";
+    $("agent-msg").style.color = "#cf222e";
+    return;
+  }
+  if (mode === "opencode" && !dir) {
+    $("agent-msg").textContent = "❌ 请填写工作目录";
     $("agent-msg").style.color = "#cf222e";
     return;
   }
   try {
     $("agent-msg").textContent = "⏳ 正在启动…";
-    const r = (await invoke("agent_start", { apiBase, apiKey, model })) as { model: string };
+    const r = (await invoke("agent_start", { mode, apiBase, apiKey, model, dir, permission })) as { engine: string; model?: string };
     st.agentRunning = true;
-    st.agentModel = r.model;
-    $("agent-msg").textContent = `✅ 启动成功！模型: ${r.model}`;
+    st.agentModel = r.engine === "opencode" ? "opencode" : (r.model || "");
+    $("agent-msg").textContent = r.engine === "opencode" ? "✅ opencode 已嵌入并启动（日志已接入）" : `✅ MiniAgent 启动成功 (${r.model})`;
     $("agent-msg").style.color = "#1a7f37";
     refreshStatus();
   } catch (e) {
@@ -165,6 +186,15 @@ async function init() {
     if (settings.api_base) ($("in-api-base") as HTMLInputElement).value = settings.api_base;
     if (settings.api_key) ($("in-api-key") as HTMLInputElement).value = settings.api_key;
     if (settings.model) ($("in-model") as HTMLInputElement).value = settings.model;
+    if (settings.agent_dir) ($("in-agent-dir") as HTMLInputElement).value = settings.agent_dir;
+    if (settings.permission) ($("in-permission") as HTMLInputElement).value = settings.permission;
+    if (settings.agent_mode) {
+      const r = document.querySelector(`input[name="agent-mode"][value="${settings.agent_mode}"]`) as HTMLInputElement;
+      if (r) r.checked = true;
+      const mode = settings.agent_mode === "opencode" ? "opencode" : "mini";
+      $("cfg-mini").classList.toggle("hidden", mode !== "mini");
+      $("cfg-opencode").classList.toggle("hidden", mode !== "opencode");
+    }
     const s = (await invoke("engine_status")) as typeof st;
     st = { ...st, ...s };
     refreshStatus();

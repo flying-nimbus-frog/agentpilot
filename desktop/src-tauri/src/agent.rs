@@ -109,7 +109,12 @@ impl OpenCodeAgent {
         format!("http://127.0.0.1:{}", self.port)
     }
 
-    pub async fn start(&mut self, dir: &str, permission: Option<&str>) -> Result<(), String> {
+    pub async fn start(
+        &mut self,
+        dir: &str,
+        permission: Option<&str>,
+        app: tauri::AppHandle,
+    ) -> Result<(), String> {
         let bin = find_opencode().ok_or("未找到 opencode，请先安装（bun install -g opencode-ai）")?;
         if let Some(child) = &mut self.child {
             if child.try_wait().ok().flatten().is_none() {
@@ -119,16 +124,68 @@ impl OpenCodeAgent {
         // 清理占用目标端口的进程（可能是上一次实例留下的孤儿 opencode）
         kill_port_occupant(self.port).await;
         let mut cmd = Command::new(&bin);
-        cmd.args(["serve", "--hostname", "127.0.0.1", "--port", &self.port.to_string()])
-            .current_dir(dir)
-            .env("OPENCODE_SERVER_PASSWORD", &self.password)
-            .env("OPENCODE_CLIENT", "opencode-remote-desktop")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
+        cmd.args([
+            "serve",
+            "--hostname", "127.0.0.1",
+            "--port", &self.port.to_string(),
+            "--print-logs",
+            "--log-level", "DEBUG",
+        ])
+        .current_dir(dir)
+        .env("OPENCODE_SERVER_PASSWORD", &self.password)
+        .env("OPENCODE_CLIENT", "opencode-remote-desktop")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
         if let Some(p) = permission.filter(|p| !p.trim().is_empty()) {
             cmd.env("OPENCODE_PERMISSION", p);
         }
-        self.child = Some(cmd.spawn().map_err(|e| format!("启动失败: {e}"))?);
+        let mut child = cmd.spawn().map_err(|e| format!("启动失败: {e}"))?;
+        // 全量日志捕获：stdout/stderr → 应用日志
+        let app_c = app.clone();
+        if let Some(stream) = child.stdout.take() {
+            tokio::spawn(async move {
+                let mut reader = tokio::io::BufReader::new(stream);
+                let mut buf = String::new();
+                use tokio::io::AsyncBufReadExt;
+                loop {
+                    let n = reader.read_line(&mut buf).await;
+                    match n {
+                        Ok(0) => break,
+                        Ok(_) => {
+                            let line = buf.trim().to_string();
+                            buf.clear();
+                            if !line.is_empty() {
+                                crate::engine::log_event(&app_c, format!("[opencode stdout] {line}"));
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            });
+        }
+        let app_c2 = app.clone();
+        if let Some(stream) = child.stderr.take() {
+            tokio::spawn(async move {
+                let mut reader = tokio::io::BufReader::new(stream);
+                let mut buf = String::new();
+                use tokio::io::AsyncBufReadExt;
+                loop {
+                    let n = reader.read_line(&mut buf).await;
+                    match n {
+                        Ok(0) => break,
+                        Ok(_) => {
+                            let line = buf.trim().to_string();
+                            buf.clear();
+                            if !line.is_empty() {
+                                crate::engine::log_event(&app_c2, format!("[opencode stderr] {line}"));
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            });
+        }
+        self.child = Some(child);
         // 等待就绪；进程提前退出则立即报错
         for _ in 0..30 {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
