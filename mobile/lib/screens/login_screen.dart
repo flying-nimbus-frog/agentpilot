@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api/relay.dart';
+import '../config.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? savedUrl;
@@ -13,7 +14,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _url = TextEditingController(text: widget.savedUrl ?? '');
+  late final TextEditingController _url =
+      TextEditingController(text: widget.savedUrl ?? defaultRelayUrl);
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _registerMode = false;
@@ -68,16 +70,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       textAlign: TextAlign.center,
                       style: const TextStyle(color: Color(0xFF57606A))),
                   const SizedBox(height: 28),
-                  TextFormField(
-                    controller: _url,
-                    decoration: const InputDecoration(
-                      labelText: '服务器地址',
-                      hintText: 'https://relay.example.com',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? '必填' : null,
-                  ),
-                  const SizedBox(height: 12),
                   TextFormField(
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,

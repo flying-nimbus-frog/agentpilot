@@ -66,10 +66,12 @@ $("tab-agent").onclick = () => switchTab("agent");
 $("tab-log").onclick = () => switchTab("log");
 
 // ---------- 动作 ----------
+const DEFAULT_RELAY = "https://relay.zhileai.net";
+
 $("btn-login").onclick = async () => {
   try {
     const user = await invoke("account_login", {
-      relayUrl: ($("in-relay") as HTMLInputElement).value,
+      relayUrl: DEFAULT_RELAY,
       email: ($("in-email") as HTMLInputElement).value,
       password: ($("in-pass") as HTMLInputElement).value,
     });
@@ -84,7 +86,7 @@ $("btn-login").onclick = async () => {
 $("btn-register").onclick = async () => {
   try {
     const user = await invoke("account_register", {
-      relayUrl: ($("in-relay") as HTMLInputElement).value,
+      relayUrl: DEFAULT_RELAY,
       email: ($("in-email") as HTMLInputElement).value,
       password: ($("in-pass") as HTMLInputElement).value,
     });
@@ -159,7 +161,6 @@ async function init() {
 
   try {
     const settings = (await invoke("settings_get")) as any;
-    if (settings.relay_url) ($("in-relay") as HTMLInputElement).value = settings.relay_url;
     if (settings.email) ($("in-email") as HTMLInputElement).value = settings.email;
     if (settings.api_base) ($("in-api-base") as HTMLInputElement).value = settings.api_base;
     if (settings.api_key) ($("in-api-key") as HTMLInputElement).value = settings.api_key;
