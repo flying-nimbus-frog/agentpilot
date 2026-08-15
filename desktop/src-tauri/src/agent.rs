@@ -97,7 +97,8 @@ impl OpenCodeAgent {
                 for line in raw.lines() {
                     if let Some(data) = line.strip_prefix("data: ") {
                         if let Ok(ev) = serde_json::from_str::<Value>(data) {
-                            let _ = tx.send(json!({"type": "event", "event": ev}));
+                            // 只发原始 opencode 事件；包装由引擎出口统一完成
+                            let _ = tx.send(ev);
                         }
                     }
                 }
