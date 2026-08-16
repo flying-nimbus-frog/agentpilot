@@ -399,26 +399,20 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
         actions: [
-          // 回合状态图标：思考/工具执行，点击弹出悬浮详情
+          // 回合状态图标：思考/工具执行（统一规格，点击弹出悬浮详情）
           if (_turnReasoning.isNotEmpty || _state == '运行中')
             IconButton(
               tooltip: '查看思考过程',
               icon: Opacity(
                 opacity: _reasoningDone ? 0.7 : 1.0,
-                child: const Icon(Icons.psychology_alt,
-                    size: 20, color: Color(0xFF0A2540)),
+                child: const _StatusIcon(Icons.psychology_alt),
               ),
               onPressed: () => _toggleFloating('thinking'),
             ),
           if (_turnTools.isNotEmpty)
             IconButton(
               tooltip: '查看工具执行',
-              icon: Badge(
-                backgroundColor: const Color(0xFF0A2540),
-                label: Text('${_turnTools.length}'),
-                child: const Icon(Icons.build,
-                    size: 18, color: Color(0xFF0A2540)),
-              ),
+              icon: _StatusIcon(Icons.build, count: '${_turnTools.length}'),
               onPressed: () => _toggleFloating('tools'),
             ),
           if (_state == '运行中')
@@ -498,6 +492,45 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         if (_floatingPanel != null) _buildFloatingPanel(),
       ],
+    );
+  }
+}
+
+/// 顶栏状态图标：统一规格圆形底 + 小号数量角标
+class _StatusIcon extends StatelessWidget {
+  final IconData icon;
+  final String? count;
+  const _StatusIcon(this.icon, {this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: const BoxDecoration(
+        color: Color(0xFFE8ECF0),
+        shape: BoxShape.circle,
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(icon, size: 17, color: const Color(0xFF0A2540)),
+          if (count != null)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0A2540),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(count!,
+                    style: const TextStyle(fontSize: 8, color: Colors.white)),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
