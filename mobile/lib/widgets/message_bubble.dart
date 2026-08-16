@@ -88,12 +88,7 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = role == 'user';
-    // 合并同一消息的所有思考 part 为一条（折叠单行）
-    final reasoningText = parts
-        .where((p) => p.type == 'reasoning')
-        .map((p) => p.text ?? '')
-        .where((t) => t.isNotEmpty)
-        .join('\n');
+    // 思考内容不在消息内渲染（由聊天页按回合统一显示一条）
     final toolParts = parts.where((p) => p.isTool).toList();
     final textParts = parts
         .where((p) => p.type == 'text' && (p.text ?? '').isNotEmpty)
@@ -111,9 +106,8 @@ class MessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (parts.isEmpty && reasoningText.isEmpty && toolParts.isEmpty && textParts.isEmpty)
+            if (toolParts.isEmpty && textParts.isEmpty)
               const Text('…', style: TextStyle(color: Colors.grey)),
-            if (reasoningText.isNotEmpty) ReasoningStrip(text: reasoningText),
             for (final p in toolParts) ToolCard(part: p),
             if (textParts.isNotEmpty)
               isUser
@@ -167,7 +161,8 @@ class MessageBubble extends StatelessWidget {
 /// 思考内容：折叠为单行横向滚动条，点击展开/收起
 class ReasoningStrip extends StatefulWidget {
   final String text;
-  const ReasoningStrip({super.key, required this.text});
+  final bool thinking;
+  const ReasoningStrip({super.key, required this.text, this.thinking = false});
 
   @override
   State<ReasoningStrip> createState() => _ReasoningStripState();
@@ -186,10 +181,9 @@ class _ReasoningStripState extends State<ReasoningStrip> {
   @override
   Widget build(BuildContext context) {
     final text = widget.text;
-    final thinking = text.isEmpty;
     final label = _expanded
         ? '收起思考'
-        : thinking
+        : widget.thinking
             ? '🤔 思考中…'
             : '🧠 已思考 · 点击展开';
     return GestureDetector(

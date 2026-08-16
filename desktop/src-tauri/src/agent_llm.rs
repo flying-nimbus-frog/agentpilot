@@ -6,6 +6,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
+/// 手机端输出风格约束：默认精炼，避免长篇大论。
+const CONCISE_PROMPT: &str = "你是在手机上运行的助手，用户通过小屏手机阅读你的回复。请务必精简：\
+优先直接给结论，去除铺垫、客套和冗余说明。除非用户明确要求详细，否则控制在 3-5 句话以内；\
+需要代码时只给关键片段，不要逐行解释。不要复述用户的问题，不要总结你做了什么。";
+
 #[derive(Clone)]
 pub struct MiniMsg {
     pub id: String,
@@ -266,18 +271,18 @@ impl MiniAgent {
             }),
         ));
 
-        // 组装历史
+        // 组装历史（前置系统指令：手机端精简输出）
         let history: Vec<Value> = {
+            let mut msgs = vec![json!({"role": "system", "content": CONCISE_PROMPT})];
             let sessions = self.sessions.lock().unwrap();
-            sessions
-                .get(session_id)
-                .map(|s| {
+            if let Some(s) = sessions.get(session_id) {
+                msgs.extend(
                     s.messages
                         .iter()
-                        .map(|m| json!({"role": m.role, "content": m.text}))
-                        .collect()
-                })
-                .unwrap_or_default()
+                        .map(|m| json!({"role": m.role, "content": m.text})),
+                );
+            }
+            msgs
         };
 
         let client = reqwest::Client::new();

@@ -35,6 +35,9 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _loading = true;
   String? _error;
   DateTime _lastEvent = DateTime.now();
+  // 回合级思考：一次对话 = 一条折叠思考条（无论 opencode 分几步思考）
+  final Map<String, String> _turnReasoning = {}; // partId -> 累计文本
+  bool _reasoningDone = false;
   Timer? _watchdog;
 
   String get _sid => widget.session.id;
@@ -97,9 +100,15 @@ class _ChatScreenState extends State<ChatScreen> {
       case 'message.part.updated':
         final part = props['part'];
         if (part is Map) {
+          final p = Part.fromJson(part.cast<String, dynamic>());
           setState(() {
             _state = '运行中';
-            _applyPart(Part.fromJson(part.cast<String, dynamic>()));
+            // 思考内容按 partId 累计，回合结束汇总为一条
+            if (p.type == 'reasoning') {
+              if (p.id != null) _turnReasoning[p.id!] = p.text ?? '';
+            } else {
+              _applyPart(p);
+            }
           });
           // reverse 列表自动锚定底部，无需滚动（避免抖动）
         }
@@ -119,7 +128,10 @@ class _ChatScreenState extends State<ChatScreen> {
         }
         break;
       case 'session.idle':
-        setState(() => _state = '空闲');
+        setState(() {
+          _state = '空闲';
+          _reasoningDone = true;
+        });
         _load();
         break;
       case 'session.error':
@@ -208,6 +220,8 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _input.clear();
       _state = '运行中';
+      _turnReasoning.clear();
+      _reasoningDone = false;
     });
     final r = await widget.app.cmd(_did, 'POST', '/session/$_sid/prompt_async',
         {'parts': [{'type': 'text', 'text': text}]});
@@ -301,6 +315,15 @@ class _ChatScreenState extends State<ChatScreen> {
                         parts: _messages[_messages.length - 1 - i].parts),
                   ),
           ),
+          // 回合级思考条：一次对话一条（固定位置，不随消息滚动）
+          if (_turnReasoning.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+              child: ReasoningStrip(
+                text: _turnReasoning.values.join('\n'),
+                thinking: !_reasoningDone,
+              ),
+            ),
           SafeArea(
             top: false,
             child: Container(

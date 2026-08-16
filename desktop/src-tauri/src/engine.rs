@@ -282,6 +282,7 @@ async fn handle_relay_msg(
             let reply = tokio::spawn(async move {
                 let id = id_task;
                 let data: Result<Value, String> = if mode_v == MODE_OPENCODE {
+                    let body = inject_concise(&method_task, &path_task, body);
                     opencode_request(&opencode_c, &method_task, &path_task, body).await
                 } else {
                     dispatch(mini_c, &method_task, &path_task, body, tx)
@@ -321,9 +322,26 @@ async fn handle_relay_msg(
     }
 }
 
+/// opencode 模式的手机端精简指令：注入到 prompt_async 的首个文本 part。
+fn inject_concise(method: &str, path: &str, body: Option<Value>) -> Option<Value> {
+    if method != "POST" || !path.ends_with("/prompt_async") {
+        return body;
+    }
+    let mut body = body?;
+    const CONCISE: &str = "你是在手机上运行的助手，用户通过小屏手机阅读你的回复。请务必精简：\
+优先直接给结论，去除铺垫、客套和冗余说明。除非用户明确要求详细，否则控制在 3-5 句话以内；\
+需要代码时只给关键片段，不要逐行解释。不要复述用户的问题，不要总结你做了什么。";
+    let parts = body.get_mut("parts")?.as_array_mut()?;
+    if let Some(first) = parts.first_mut() {
+        if let Some(text) = first.get("text").and_then(|t| t.as_str()) {
+            first["text"] = Value::String(format!("{text}\n\n{CONCISE}"));
+        }
+    }
+    Some(body)
+}
+
 /// 指令分发：MiniAgent 实现 opencode 兼容指令面
-fn dispatch(
-    mini: Arc<MiniAgent>,
+fn dispatch(    mini: Arc<MiniAgent>,
     method: &str,
     path: &str,
     body: Option<Value>,
