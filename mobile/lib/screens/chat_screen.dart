@@ -50,6 +50,8 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _load();
     _sub = widget.app.events.listen(_onEvent);
+    // 重连成功后自动补拉消息（恢复断开期间错过的内容）
+    _recSub = widget.app.reconnected.listen((_) => _load());
     // 看门狗：运行中超过 90s 无任何事件 → 视为卡死，重置状态并刷新
     _watchdog = Timer.periodic(const Duration(seconds: 15), (_) {
       if (_state == '运行中' &&
@@ -63,6 +65,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _sub?.cancel();
+    _recSub?.cancel();
     _watchdog?.cancel();
     _input.dispose();
     _scroll.dispose();
@@ -387,13 +390,10 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(width: 6),
             ValueListenableBuilder<bool>(
               valueListenable: widget.app.wsAlive,
-              builder: (_, alive, __) => Text(
-                alive ? '●' : '○ 连接断开',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: alive ? Colors.green : Colors.red,
-                ),
-              ),
+              builder: (_, alive, __) => alive
+                  ? const SizedBox.shrink()
+                  : const Text('重连中…',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF8C959F))),
             ),
             ]),
           ],

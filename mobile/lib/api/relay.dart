@@ -38,6 +38,7 @@ class RelayApp {
   final StreamController<Map<String, dynamic>> _events =
       StreamController.broadcast();
   final ValueNotifier<bool> wsAlive = ValueNotifier(false);
+  final StreamController<void> reconnected = StreamController.broadcast();
   final List<Device> _devices = [];
 
   RelayApp({required this.relayUrl, required this.token, required this.email}) {
