@@ -155,12 +155,14 @@ class PermissionAsk {
   final String sessionId;
   final String tool;
   final dynamic input;
+  final String? userText;
 
   const PermissionAsk({
     required this.permissionId,
     required this.sessionId,
     required this.tool,
     this.input,
+    this.userText,
   });
 
   factory PermissionAsk.fromProps(Map<String, dynamic> p) => PermissionAsk(
@@ -168,5 +170,6 @@ class PermissionAsk {
         sessionId: p['sessionID'] as String? ?? '',
         tool: (p['permission'] ?? p['tool'] ?? 'unknown') as String,
         input: p['metadata'] ?? p['patterns'] ?? p['input'],
+        userText: p['userText'] as String?,
       );
 }

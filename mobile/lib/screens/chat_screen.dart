@@ -363,8 +363,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final p = _permission;
     if (p == null) return;
     setState(() => _permission = null);
+    // question 工具：回答以文本形式提交（response 直接传答案）
+    final body = {'response': response};
     final r = await widget.app.cmd(_did, 'POST',
-        '/session/$_sid/permissions/${p.permissionId}', {'response': response});
+        '/session/$_sid/permissions/${p.permissionId}', body);
     if (!r.ok && mounted) {
       setState(() => _error = r.error);
     }
@@ -515,10 +517,13 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
-      bottomSheet: _permission != null
-          ? PermissionCard(permission: _permission!, onRespond: _respond)
-          : null,
         ),
+        if (_permission != null)
+          PermissionCard(
+            permission: _permission!,
+            keyboardInset: MediaQuery.of(context).viewInsets.bottom,
+            onRespond: _respond,
+          ),
         if (_floatingPanel != null) _buildFloatingPanel(),
       ],
     );
