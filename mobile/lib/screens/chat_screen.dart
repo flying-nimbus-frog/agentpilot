@@ -78,6 +78,23 @@ class _ChatScreenState extends State<ChatScreen> {
                 ?.map((e) => Message.fromJson(e as Map<String, dynamic>))
                 .toList() ??
             [];
+        // 兜底：从最新助手消息找回思考内容（实时事件可能已错过）
+        if (_turnReasoning.isEmpty) {
+          for (final m in _messages.reversed.take(3)) {
+            if (m.role == 'assistant') {
+              final rps = m.parts
+                  .where((p) => p.type == 'reasoning' && (p.text ?? '').isNotEmpty)
+                  .toList();
+              if (rps.isNotEmpty) {
+                for (final p in rps) {
+                  if (p.id != null) _turnReasoning[p.id!] = p.text!;
+                }
+                _reasoningDone = _state != '运行中';
+                break;
+              }
+            }
+          }
+        }
         _loading = false;
       });
       _scrollToBottom();
@@ -226,7 +243,7 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               Row(
                 children: [
-                  const Text('🧠 思考过程',
+                  const Text('💭 思考过程',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                   const Spacer(),
                   TextButton(
@@ -380,7 +397,7 @@ class _ChatScreenState extends State<ChatScreen> {
               tooltip: '查看思考过程',
               icon: Opacity(
                 opacity: _reasoningDone ? 0.6 : 1.0,
-                child: const Text('🧠', style: TextStyle(fontSize: 15)),
+                child: const Text('💭', style: TextStyle(fontSize: 15)),
               ),
               onPressed: () => _showThinkingSheet(),
             ),

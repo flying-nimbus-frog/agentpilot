@@ -105,7 +105,8 @@ class MessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (textParts.isEmpty)
+            // 用户消息空时不留占位；助手消息流式中显示 …
+            if (textParts.isEmpty && !isUser)
               const Text('…', style: TextStyle(color: Colors.grey)),
             if (textParts.isNotEmpty)
               isUser
@@ -245,7 +246,7 @@ class _ReasoningStripState extends State<ReasoningStrip> {
         ? '收起思考'
         : widget.thinking
             ? '🤔 思考中…'
-            : '🧠 已思考 · 点击展开';
+            : '💭 已思考 · 点击展开';
     return GestureDetector(
       onTap: () => setState(() => _expanded = !_expanded),
       child: Container(
@@ -261,7 +262,7 @@ class _ReasoningStripState extends State<ReasoningStrip> {
           children: [
             Row(
               children: [
-                const Text('🧠', style: TextStyle(fontSize: 12)),
+                const Text('💭', style: TextStyle(fontSize: 12)),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(label,
