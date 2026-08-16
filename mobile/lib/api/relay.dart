@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../config.dart';
 import 'protocol.dart';
 
 class ApiError implements Exception {
@@ -22,6 +23,7 @@ class RelayApp {
   final String relayUrl; // 形如 https://server 或 http://192.168.1.5:8080
   String token;
   String email;
+  bool emailVerified = false;
 
   late String _httpBase;
   late String _wsBase;
@@ -78,16 +80,45 @@ class RelayApp {
       String relayUrl, String email, String password) async {
     final d = await _post('$relayUrl/api/register',
         {'email': email, 'password': password});
-    return RelayApp(
+    final app = RelayApp(
         relayUrl: relayUrl, token: d['token'], email: email);
+    final u = d['user'];
+    if (u is Map && u['emailVerified'] is bool) {
+      app.emailVerified = u['emailVerified'] as bool;
+    }
+    return app;
   }
 
   static Future<RelayApp> login(
       String relayUrl, String email, String password) async {
     final d = await _post(
         '$relayUrl/api/login', {'email': email, 'password': password});
-    return RelayApp(
+    final app = RelayApp(
         relayUrl: relayUrl, token: d['token'], email: email);
+    final u = d['user'];
+    if (u is Map && u['emailVerified'] is bool) {
+      app.emailVerified = u['emailVerified'] as bool;
+    }
+    return app;
+  }
+
+  /// 发送密码重置邮件
+  static Future<void> forgotPassword(String email) async {
+    const relayUrl = defaultRelayUrl;
+    await _post('$relayUrl/api/forgot-password', {'email': email});
+  }
+
+  /// 重新发送邮箱验证邮件（需登录）
+  Future<void> resendVerification() async {
+    final res = await http
+        .post(Uri.parse('$_httpBase/api/resend-verification'), headers: {
+      'Authorization': 'Bearer $token',
+    }).timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) throw ApiError('重发失败 HTTP ${res.statusCode}');
+    final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    if (data['message'] != null && (data['message'] as String).contains('already')) {
+      throw ApiError('邮箱已验证');
+    }
   }
 
   Future<List<Device>> fetchDevices() async {

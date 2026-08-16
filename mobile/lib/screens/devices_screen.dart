@@ -155,6 +155,34 @@ class _DevicesScreenState extends State<DevicesScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (!widget.app.emailVerified)
+              Card(
+                color: const Color(0xFFFFF8E1),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text('⚠️ 邮箱未验证，部分功能可能受限',
+                            style: TextStyle(fontSize: 13)),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          try {
+                            await widget.app.resendVerification();
+                            messenger.showSnackBar(const SnackBar(
+                                content: Text('验证邮件已发送，请查收')));
+                          } catch (e) {
+                            messenger.showSnackBar(SnackBar(content: Text('$e')));
+                          }
+                        },
+                        child: const Text('重新发送'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),

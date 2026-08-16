@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/relay.dart';
 import '../config.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? savedUrl;
@@ -115,6 +116,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? null
                         : () => setState(() => _registerMode = !_registerMode),
                     child: Text(_registerMode ? '已有账号？去登录' : '没有账号？去注册'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const ForgotPasswordScreen()),
+                    ),
+                    child: const Text('忘记密码？',
+                        style: TextStyle(fontSize: 13, color: Color(0xFF57606A))),
                   ),
                 ],
               ),
