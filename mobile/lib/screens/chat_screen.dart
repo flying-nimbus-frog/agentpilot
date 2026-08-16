@@ -78,6 +78,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final r = await widget.app.cmd(_did, 'GET', '/session/$_sid/message?limit=200');
       if (!r.ok) throw ApiError(r.error ?? '加载失败');
       setState(() {
+        _error = null; // 成功加载时清除历史错误（如"opencode 未启动"）
         _messages = (r.data as List?)
                 ?.map((e) => Message.fromJson(e as Map<String, dynamic>))
                 .toList() ??
@@ -340,6 +341,9 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     final r = await widget.app.cmd(_did, 'POST', '/session/$_sid/prompt_async',
         {'parts': [{'type': 'text', 'text': text}]});
+    if (r.ok && mounted) {
+      setState(() => _error = null);
+    }
     if (!r.ok && mounted) {
       setState(() {
         _state = '空闲';
