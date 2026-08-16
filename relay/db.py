@@ -64,7 +64,7 @@ def create_user(email: str, password_hash: str, salt: str) -> dict:
     with _conn() as conn:
         try:
             conn.execute(
-                "INSERT INTO users (id, email, password_hash, salt, created_at) VALUES (?,?,?,?,?)",
+                "INSERT INTO users (id, email, password_hash, salt, email_verified, created_at) VALUES (?,?,?,?,0,?)",
                 (uid, email, password_hash, salt, int(time.time() * 1000)),
             )
         except sqlite3.IntegrityError:
