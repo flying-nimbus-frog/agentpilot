@@ -358,7 +358,11 @@ def _send(ws: WebSocket, msg: dict):
 @app.websocket("/ws/phone")
 async def ws_phone(ws: WebSocket):
     token = ws.query_params.get("token", "")
-    user_id = decode_token(token)
+    payload = decode_token(token)
+    if not payload or payload.get("purpose", "auth") != "auth":
+        await ws.close(code=4401)
+        return
+    user_id = payload.get("sub")
     if not user_id:
         await ws.close(code=4401)
         return
