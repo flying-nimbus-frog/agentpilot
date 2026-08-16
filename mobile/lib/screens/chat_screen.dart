@@ -248,14 +248,16 @@ class _ChatScreenState extends State<ChatScreen> {
           color: Colors.black38,
           alignment: Alignment.center,
           child: Padding(
-            padding: EdgeInsets.only(bottom: bottomInset),
+            // 上下双向避让：键盘下方 + 顶部安全边距，面板不顶到屏幕边界
+            padding: EdgeInsets.only(
+                bottom: bottomInset, top: 56, left: 16, right: 16),
             child: GestureDetector(
               onTap: () {},
               child: Container(
-              width: MediaQuery.of(context).size.width * 0.9,
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.6,
-              ),
+                width: double.infinity,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.5,
+                ),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
