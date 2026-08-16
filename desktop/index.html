@@ -21,6 +21,7 @@
     <nav>
       <button id="tab-device" class="tab active">设备</button>
       <button id="tab-agent" class="tab">Agent</button>
+      <button id="tab-activity" class="tab">活动</button>
       <button id="tab-log" class="tab">日志</button>
     </nav>
 
@@ -92,6 +93,14 @@
           <button id="btn-agent-stop" class="danger">停止 Agent</button>
         </div>
         <p id="agent-msg" class="msg"></p>
+      </div>
+    </section>
+
+    <!-- ============ 活动 ============ -->
+    <section id="pane-activity" class="pane">
+      <div class="card log-card">
+        <h3>Agent 运行过程（实时）</h3>
+        <div id="activity-view" class="activity"></div>
       </div>
     </section>
 

@@ -128,3 +128,21 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .hidden { display: none !important; }
+
+/* ---------- 活动页 ---------- */
+.activity {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 320px;
+  max-height: 420px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.act-status { font-weight: 700; color: var(--orange); margin-bottom: 8px; }
+.act-user { background: #eaf2ff; border-radius: 8px; padding: 6px 10px; margin-bottom: 6px; color: #1f2328; }
+.act-reasoning { background: #f4f1e8; border-radius: 8px; padding: 6px 10px; margin-bottom: 6px; color: #8a6d1a; white-space: pre-wrap; word-break: break-all; }
+.act-tools { color: var(--dim); margin-bottom: 6px; }
+.act-text { color: #1f2328; white-space: pre-wrap; word-break: break-all; }

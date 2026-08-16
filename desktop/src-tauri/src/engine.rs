@@ -206,6 +206,8 @@ pub async fn run(
                     }
                     ev = recv_agent => {
                         if let Some(ev) = ev {
+                            // 桌面端活动页实时显示
+                            let _ = app.emit("agent-event", &ev);
                             // 按协议包装后转发（中继只认 {"type":"event","event":<原始事件>}）
                             let wrapped = json!({"type": "event", "event": ev});
                             let _ = sink.send(WsMessage::Text(serde_json::to_string(&wrapped).unwrap())).await;

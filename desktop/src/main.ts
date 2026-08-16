@@ -47,6 +47,66 @@ function refreshStatus() {
   stopBtn.disabled = !st.agentRunning;
 }
 
+// ---------- 活动（Agent 运行过程实时显示） ----------
+const act = {
+  userText: "",
+  reasoning: [] as string[],
+  tools: [] as string[],
+  text: "",
+  running: false,
+};
+
+function renderActivity() {
+  const view = $("activity-view");
+  let html = "";
+  if (act.running) html += '<div class="act-status running">● 运行中</div>';
+  if (act.userText) html += `<div class="act-user">👤 ${escapeHtml(act.userText)}</div>`;
+  if (act.reasoning.length)
+    html += `<div class="act-reasoning">💭 ${escapeHtml(act.reasoning.join("\n"))}</div>`;
+  if (act.tools.length)
+    html += `<div class="act-tools">🛠 ${act.tools.map(escapeHtml).join(" · ")}</div>`;
+  if (act.text) html += `<div class="act-text">${escapeHtml(act.text)}</div>`;
+  view.innerHTML = html || '<div class="dim">等待任务…</div>';
+  view.scrollTop = view.scrollHeight;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function onAgentEvent(ev: any) {
+  const type = ev.type;
+  const props = ev.properties || {};
+  if (type === "session.status" || type === "session.idle") {
+    const st = props.status?.type;
+    if (st === "busy") act.running = true;
+    else if (st === "idle" || type === "session.idle") {
+      act.running = false;
+      // 回合结束：保留显示，等待下一条用户消息重置
+    }
+    renderActivity();
+    return;
+  }
+  if (type === "message.part.updated") {
+    const p = props.part || {};
+    if (p.type === "text") {
+      // 用户消息回显 or 助手输出（按 messageID 区分不了，用大小启发式：首个大段文本视为用户输入）
+      const isUserEcho = !act.text && !act.userText && act.reasoning.length === 0;
+      if (isUserEcho) act.userText = p.text || "";
+      else act.text = p.text || "";
+    } else if (p.type === "reasoning") {
+      act.reasoning = [p.text || ""];
+    } else if (p.type === "tool") {
+      const st2 = typeof p.state === "string" ? p.state : p.state?.status || "";
+      const item = `${p.tool || "tool"}(${st2})`;
+      if (!act.tools.includes(item)) act.tools.push(item);
+    }
+    renderActivity();
+  }
+}
+
+listen("agent-event", (e) => onAgentEvent(e.payload));
+
 // ---------- 日志 ----------
 function logLine(line: string) {
   const view = $("log-view");
@@ -55,14 +115,15 @@ function logLine(line: string) {
 }
 
 // ---------- 页签 ----------
-function switchTab(name: "device" | "agent" | "log") {
-  for (const t of ["device", "agent", "log"] as const) {
+function switchTab(name: "device" | "agent" | "activity" | "log") {
+  for (const t of ["device", "agent", "activity", "log"] as const) {
     $(`tab-${t}`).classList.toggle("active", t === name);
     $(`pane-${t}`).classList.toggle("active", t === name);
   }
 }
 $("tab-device").onclick = () => switchTab("device");
 $("tab-agent").onclick = () => switchTab("agent");
+$("tab-activity").onclick = () => switchTab("activity");
 $("tab-log").onclick = () => switchTab("log");
 
 // ---------- 动作 ----------
