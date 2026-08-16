@@ -33,3 +33,4 @@ mobile/*.iml
 # 日志
 logs/
 *.log
+.env
