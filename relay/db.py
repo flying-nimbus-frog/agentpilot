@@ -23,6 +23,8 @@ def init_db() -> None:
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
                 salt TEXT NOT NULL,
+                email_verified INTEGER NOT NULL DEFAULT 0,
+                session_version INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS devices (
@@ -40,7 +42,12 @@ def init_db() -> None:
             );
             """
         )
-        # 旧库迁移：补充 status/pairing 字段（老设备视为已激活）
+        # 旧库迁移：补充 email_verified / session_version（老用户视为已验证）
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)")}
+        if "email_verified" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1")
+        if "session_version" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0")
         cols = {r[1] for r in conn.execute("PRAGMA table_info(devices)")}
         if "status" not in cols:
             conn.execute("ALTER TABLE devices ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
@@ -63,6 +70,23 @@ def create_user(email: str, password_hash: str, salt: str) -> dict:
         except sqlite3.IntegrityError:
             return None
     return {"id": uid, "email": email}
+
+
+def mark_email_verified(user_id: str) -> bool:
+    with _conn() as conn:
+        cur = conn.execute(
+            "UPDATE users SET email_verified=1 WHERE id=?", (user_id,)
+        )
+        return cur.rowcount > 0
+
+
+def bump_session_version(user_id: str) -> None:
+    """吊销所有 JWT：版本号 +1，旧 token 全部失效。"""
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE users SET session_version = session_version + 1 WHERE id=?",
+            (user_id,),
+        )
 
 
 def get_user_by_email(email: str) -> dict | None:

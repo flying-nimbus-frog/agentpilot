@@ -124,3 +124,18 @@ curl -X POST http://localhost:8000/api/register -H 'Content-Type: application/js
 # 手机端全链路（需 companion 在线）
 .venv/bin/python test_phone.py ws://localhost:8080 a@b.com 123456
 ```
+
+## 邮件（邮箱验证 / 密码找回）
+
+中继需要 SMTP 发信（.env 或环境变量）：
+
+```
+RELAY_SMTP_HOST=smtp.example.com
+RELAY_SMTP_PORT=465          # 465=SSL, 587=STARTTLS
+RELAY_SMTP_USER=no-reply@yourdomain.com
+RELAY_SMTP_PASS=********
+RELAY_MAIL_FROM=no-reply@yourdomain.com
+RELAY_PUBLIC_BASE=https://relay.zhileai.net
+```
+
+未配置 SMTP 时：验证/重置链接打印到容器日志（仅开发用）。国内可选阿里云邮件推送、SendGrid 等。

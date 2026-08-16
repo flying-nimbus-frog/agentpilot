@@ -26,9 +26,22 @@ Body: { "email": "a@b.com", "password": "******" }
 ```
 POST /api/login
 Body: { "email": "a@b.com", "password": "******" }
-200 → { "token": "<jwt>", "user": {...} }
+200 → { "token": "<jwt>", "user": { "id", "email", "emailVerified" } }
 401 → { "detail": "邮箱或密码错误" }
 ```
+
+### 2.3 账号安全（邮箱验证 / 找回密码 / 会话吊销）
+
+```
+GET  /api/verify?token=<vt>                  # 邮箱验证（邮件链接）
+POST /api/forgot-password {email}            # 发送重置邮件（防枚举，恒返回成功）
+POST /api/reset-password {token, password}   # 重置密码（成功后吊销所有会话）
+POST /api/sessions/revoke                    # 登出所有设备（Bearer JWT）
+```
+
+- 注册后 `emailVerified=false`，验证后为 true
+- JWT 含 `ver`（会话版本）；吊销/重置密码后版本 +1，旧 token 立即 401
+- 验证/重置令牌为一次性 JWT：验证 24h 有效，重置 1h 有效
 
 ### 2.3 设备列表（手机端）
 

@@ -6,7 +6,15 @@ import secrets
 import time
 
 import db
-from auth import create_token, decode_token, hash_password, verify_password
+import mailer
+from auth import (
+    create_one_time_token,
+    create_token,
+    decode_token,
+    hash_password,
+    verify_one_time_token,
+    verify_password,
+)
 from fastapi import FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -57,6 +65,15 @@ class DeviceIn(BaseModel):
     name: str
 
 
+class ForgotIn(BaseModel):
+    email: str
+
+
+class ResetIn(BaseModel):
+    token: str
+    password: str
+
+
 class PairIn(BaseModel):
     code: str
 
@@ -93,7 +110,19 @@ def register(body: RegisterIn, request: Request):
     user = db.create_user(email, pwd_hash, salt)
     if user is None:
         raise HTTPException(409, "邮箱已注册")
-    return {"token": create_token(user["id"]), "user": user}
+    # 发送邮箱验证邮件（未配置 SMTP 时链接打印到日志）
+    vt = create_one_time_token(user["id"], "verify", 24 * 3600)
+    mailer.send_mail(
+        email,
+        "AgentPilot 邮箱验证",
+        f"欢迎注册 AgentPilot！请点击以下链接完成邮箱验证（24 小时内有效）：\n\n{mailer.build_verify_url(vt)}",
+    )
+    ver = 0
+    return {
+        "token": create_token(user["id"], ver),
+        "user": {**user, "emailVerified": False},
+        "verificationSent": mailer.enabled(),
+    }
 
 
 @app.post("/api/login")
@@ -104,19 +133,85 @@ def login(body: LoginIn, request: Request):
     if not user or not verify_password(body.password, user["salt"], user["password_hash"]):
         raise HTTPException(401, "邮箱或密码错误")
     rl_login.reset(_client_ip(request))
-    return {"token": create_token(user["id"]), "user": {"id": user["id"], "email": user["email"]}}
+    return {
+        "token": create_token(user["id"], user["session_version"]),
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "emailVerified": bool(user["email_verified"]),
+        },
+    }
 
 
 def _require_user(authorization: str | None) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "未登录")
-    user_id = decode_token(authorization[7:])
+    payload = decode_token(authorization[7:])
+    if not payload or payload.get("purpose", "auth") != "auth":
+        raise HTTPException(401, "登录已过期")
+    user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(401, "登录已过期")
     user = db.get_user(user_id)
     if not user:
         raise HTTPException(401, "用户不存在")
+    # 会话吊销检查：token 中的版本必须等于当前版本
+    if payload.get("ver", 0) != user["session_version"]:
+        raise HTTPException(401, "登录已失效，请重新登录")
     return user
+
+
+@app.get("/api/verify")
+def api_verify(token: str, request: Request = None):
+    """邮箱验证（邮件里的链接）。"""
+    user_id = verify_one_time_token(token, "verify")
+    if not user_id:
+        raise HTTPException(400, "验证链接无效或已过期")
+    db.mark_email_verified(user_id)
+    return {"ok": True, "message": "邮箱验证成功"}
+
+
+@app.post("/api/forgot-password")
+def api_forgot_password(body: ForgotIn, request: Request):
+    """发送密码重置邮件（无论邮箱是否存在都返回成功，防枚举）。"""
+    _check_ratelimit(request, rl_register, "找回密码")
+    email = body.email.strip().lower()
+    user = db.get_user_by_email(email)
+    if user:
+        rt = create_one_time_token(user["id"], "reset", 3600)
+        mailer.send_mail(
+            email,
+            "AgentPilot 密码重置",
+            f"请点击以下链接重置密码（1 小时内有效）：\n\n{mailer.build_reset_url(rt)}",
+        )
+    return {"ok": True, "message": "如果该邮箱已注册，重置链接已发送"}
+
+
+@app.post("/api/reset-password")
+def api_reset_password(body: ResetIn, request: Request):
+    """用邮件里的令牌重置密码。"""
+    _check_ratelimit(request, rl_register, "重置密码")
+    user_id = verify_one_time_token(body.token, "reset")
+    if not user_id:
+        raise HTTPException(400, "重置链接无效或已过期")
+    if len(body.password) < 6:
+        raise HTTPException(400, "密码至少 6 位")
+    pwd_hash, salt = hash_password(body.password)
+    with db._conn() as conn:
+        conn.execute(
+            "UPDATE users SET password_hash=?, salt=? WHERE id=?",
+            (pwd_hash, salt, user_id),
+        )
+    db.bump_session_version(user_id)  # 重置后所有旧登录失效
+    return {"ok": True, "message": "密码已重置，请重新登录"}
+
+
+@app.post("/api/sessions/revoke")
+def api_sessions_revoke(authorization: str | None = Header(None)):
+    """登出所有设备：所有已签发的 JWT 立即失效。"""
+    user = _require_user(authorization)
+    db.bump_session_version(user["id"])
+    return {"ok": True, "message": "所有登录已失效"}
 
 
 @app.get("/api/devices")
