@@ -29,6 +29,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   StreamSubscription<dynamic>? _sub;
+  StreamSubscription<dynamic>? _recSub;
 
   String _state = '空闲';
   PermissionAsk? _permission;
