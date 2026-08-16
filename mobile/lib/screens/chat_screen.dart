@@ -435,16 +435,17 @@ class _ChatScreenState extends State<ChatScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : Builder(builder: (ctx) {
-                    final anyText = _messages.any((m) =>
-                        m.parts
-                            .any((p) =>
-                                p.type == 'text' && (p.text ?? '').isNotEmpty));
-                    final showTyping = _state == '运行中' && !anyText;
+                    // 只渲染含正文的消息；纯工具/思考消息不占行（详情在悬浮面板）
+                    final visible = _messages
+                        .where((m) => m.parts.any((p) =>
+                            p.type == 'text' && (p.text ?? '').isNotEmpty))
+                        .toList();
+                    final showTyping = _state == '运行中' && visible.isEmpty;
                     return ListView.builder(
                       controller: _scroll,
                       reverse: true, // 底部锚定：新消息/键盘弹出都不遮挡最新内容
                       padding: const EdgeInsets.all(14),
-                      itemCount: _messages.length + (showTyping ? 1 : 0),
+                      itemCount: visible.length + (showTyping ? 1 : 0),
                       itemBuilder: (_, i) {
                         if (showTyping && i == 0) {
                           // 单一"正在思考"指示（运行中且尚无正文时）
@@ -458,10 +459,11 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                           );
                         }
-                        final idx = _messages.length - 1 - i + (showTyping ? 1 : 0);
+                        final idx =
+                            visible.length - 1 - i + (showTyping ? 1 : 0);
                         return MessageBubble(
-                            role: _messages[idx].role,
-                            parts: _messages[idx].parts);
+                            role: visible[idx].role,
+                            parts: visible[idx].parts);
                       },
                     );
                   }),
