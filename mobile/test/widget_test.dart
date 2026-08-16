@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:opencode_remote/main.dart';
+import 'package:agentpilot/main.dart';
 
 void main() {
   testWidgets('登录页冒烟测试', (WidgetTester tester) async {

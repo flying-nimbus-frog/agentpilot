@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('📱 OpenCode Remote',
+                  const Text('🤖 AgentPilot',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 4),
