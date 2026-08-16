@@ -52,7 +52,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _load();
     _sub = widget.app.events.listen(_onEvent);
     // 重连成功后自动补拉消息（恢复断开期间错过的内容）
-    _recSub = widget.app.reconnected.listen((_) => _load());
+    _recSub = widget.app.reconnected.stream.listen((_) => _load());
     // 看门狗：运行中超过 90s 无任何事件 → 视为卡死，重置状态并刷新
     _watchdog = Timer.periodic(const Duration(seconds: 15), (_) {
       if (_state == '运行中' &&
