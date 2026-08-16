@@ -47,62 +47,116 @@ function refreshStatus() {
   stopBtn.disabled = !st.agentRunning;
 }
 
-// ---------- 活动（Agent 运行过程实时显示） ----------
-const act = {
-  userText: "",
-  reasoning: [] as string[],
-  tools: [] as string[],
-  text: "",
-  running: false,
-};
+// ---------- 活动（与手机端一致的聊天视图） ----------
+interface APart { id: string; type: string; text: string; tool?: string; state?: string; }
+interface AMsg { id: string; role: string; parts: APart[]; }
+let msgs: AMsg[] = [];
+let overlay: { kind: "reasoning" | "tools"; parts: APart[] } | null = null;
 
-function renderActivity() {
-  const view = $("activity-view");
-  let html = "";
-  if (act.running) html += '<div class="act-status running">● 运行中</div>';
-  if (act.userText) html += `<div class="act-user">👤 ${escapeHtml(act.userText)}</div>`;
-  if (act.reasoning.length)
-    html += `<div class="act-reasoning">💭 ${escapeHtml(act.reasoning.join("\n"))}</div>`;
-  if (act.tools.length)
-    html += `<div class="act-tools">🛠 ${act.tools.map(escapeHtml).join(" · ")}</div>`;
-  if (act.text) html += `<div class="act-text">${escapeHtml(act.text)}</div>`;
-  view.innerHTML = html || '<div class="dim">等待任务…</div>';
-  view.scrollTop = view.scrollHeight;
-}
-
-function escapeHtml(s: string): string {
+function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function partState(p: any): string {
+  const st = p.state;
+  return typeof st === "string" ? st : st?.status || "";
+}
+function upsertMsg(id: string, role: string) {
+  let m = msgs.find((x) => x.id === id);
+  if (!m) { m = { id, role, parts: [] }; msgs.push(m); }
+  else if (m.role !== role) m.role = role;
+  return m;
+}
+function upsertPart(m: AMsg, p: APart) {
+  const i = m.parts.findIndex((x) => x.id === p.id);
+  if (i >= 0) m.parts[i] = p; else m.parts.push(p);
 }
 
 function onAgentEvent(ev: any) {
-  const type = ev.type;
   const props = ev.properties || {};
-  if (type === "session.status" || type === "session.idle") {
-    const st = props.status?.type;
-    if (st === "busy") act.running = true;
-    else if (st === "idle" || type === "session.idle") {
-      act.running = false;
-      // 回合结束：保留显示，等待下一条用户消息重置
+  switch (ev.type) {
+    case "message.created":
+    case "message.updated": {
+      const info = props.info;
+      if (info && info.id) upsertMsg(info.id, info.role || "assistant");
+      break;
     }
-    renderActivity();
-    return;
-  }
-  if (type === "message.part.updated") {
-    const p = props.part || {};
-    if (p.type === "text") {
-      // 用户消息回显 or 助手输出（按 messageID 区分不了，用大小启发式：首个大段文本视为用户输入）
-      const isUserEcho = !act.text && !act.userText && act.reasoning.length === 0;
-      if (isUserEcho) act.userText = p.text || "";
-      else act.text = p.text || "";
-    } else if (p.type === "reasoning") {
-      act.reasoning = [p.text || ""];
-    } else if (p.type === "tool") {
-      const st2 = typeof p.state === "string" ? p.state : p.state?.status || "";
-      const item = `${p.tool || "tool"}(${st2})`;
-      if (!act.tools.includes(item)) act.tools.push(item);
+    case "message.part.updated": {
+      const p = props.part || {};
+      const mid = p.messageID;
+      if (!mid) break;
+      const m = upsertMsg(mid, "assistant");
+      upsertPart(m, {
+        id: p.id || Math.random().toString(36).slice(2),
+        type: p.type || "text",
+        text: p.text || "",
+        tool: p.tool,
+        state: partState(p),
+      });
+      break;
     }
-    renderActivity();
+    default:
+      break;
   }
+  renderActivity();
+}
+
+function renderActivity() {
+  const view = $("activity-view");
+  if (msgs.length === 0) { view.innerHTML = '<div class="dim">等待任务…</div>'; return; }
+  let html = "";
+  for (const m of msgs) {
+    const isUser = m.role === "user";
+    const textParts = m.parts.filter((p) => p.type === "text" && p.text);
+    const reasonParts = m.parts.filter((p) => p.type === "reasoning");
+    const toolParts = m.parts.filter((p) => p.type === "tool");
+    html += '<div class="act-row ' + (isUser ? "right" : "left") + '">';
+    html += '<div class="act-bubble ' + (isUser ? "user" : "agent") + '">';
+    if (reasonParts.length)
+      html += '<span class="act-chip" data-kind="reasoning" data-msg="' + m.id + '">💭 思考中/已思考</span> ';
+    if (toolParts.length)
+      html += '<span class="act-chip" data-kind="tools" data-msg="' + m.id + '">🛠 工具 ' + toolParts.length + '</span> ';
+    html += textParts.map((p) => '<div class="act-text">' + esc(p.text) + "</div>").join("");
+    if (!textParts.length && !reasonParts.length && !toolParts.length) html += '<div class="dim">…</div>';
+    html += "</div></div>";
+  }
+  view.innerHTML = html;
+  // 折叠条点击 → 悬浮详情
+  view.querySelectorAll(".act-chip").forEach((el) => {
+    (el as HTMLElement).onclick = (e) => {
+      e.stopPropagation();
+      const kind = (el as HTMLElement).dataset.kind as "reasoning" | "tools";
+      const msgId = (el as HTMLElement).dataset.msg as string;
+      const m = msgs.find((x) => x.id === msgId);
+      if (!m) return;
+      overlay = { kind, parts: m.parts.filter((p) => kind === "reasoning" ? p.type === "reasoning" : p.type === "tool") };
+      renderOverlay();
+    };
+  });
+  view.scrollTop = view.scrollHeight;
+}
+
+function renderOverlay() {
+  let ov = document.getElementById("act-overlay");
+  if (!overlay) { if (ov) ov.remove(); return; }
+  if (!ov) {
+    ov = document.createElement("div");
+    ov.id = "act-overlay";
+    document.body.appendChild(ov);
+    ov.onclick = () => { overlay = null; renderOverlay(); };
+  }
+  const kind = overlay.kind;
+  const inner = overlay.parts.map((p) => {
+    if (kind === "reasoning") return '<div class="ov-block">' + esc(p.text) + "</div>";
+    const st = p.state || "";
+    let body = esc(p.tool || "tool") + " (" + st + ")";
+    if (p.text) body += "<br/>" + esc(p.text);
+    return '<div class="ov-block">' + body + "</div>";
+  }).join("");
+  ov.innerHTML =
+    '<div class="ov-panel" onclick="event.stopPropagation()">' +
+    '<div class="ov-head">' + (kind === "reasoning" ? "💭 思考过程" : "🛠 工具执行") +
+    ' <button onclick="document.getElementById(\'act-overlay\').remove(); overlay=null; return false;">✕</button></div>' +
+    '<div class="ov-body">' + inner + "</div></div>";
 }
 
 listen("agent-event", (e) => onAgentEvent(e.payload));
