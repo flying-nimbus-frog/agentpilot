@@ -118,10 +118,11 @@ function renderActivity() {
   for (const m of msgs) {
     const isUser = m.role === "user";
     const textParts = m.parts.filter((p) => p.type === "text" && p.text);
+    // 只渲染含正文的消息；纯工具/思考消息不占行（详情在顶部折叠条）
+    if (!textParts.length) continue;
     html += '<div class="act-row ' + (isUser ? "right" : "left") + '">';
     html += '<div class="act-bubble ' + (isUser ? "user" : "agent") + '">';
     html += textParts.map((p) => '<div class="act-text">' + esc(p.text) + "</div>").join("");
-    if (!textParts.length) html += '<div class="dim">…</div>';
     html += "</div></div>";
   }
   view.innerHTML = html;
