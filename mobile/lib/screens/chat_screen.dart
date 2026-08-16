@@ -228,83 +228,82 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // ---------- 悬浮详情 ----------
+  // ---------- 悬浮详情（覆盖层，不改变聊天区布局） ----------
+  String? _floatingPanel; // 'thinking' | 'tools' | null
 
-  void _showThinkingSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Text('💭 思考过程',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                  const Spacer(),
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('关闭')),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: SelectableText(
-                    _turnReasoning.values.join('\n'),
-                    style: const TextStyle(
-                        fontSize: 13, height: 1.6, color: Color(0xFF57606A)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void _toggleFloating(String kind) {
+    setState(() => _floatingPanel = _floatingPanel == kind ? null : kind);
   }
 
-  void _showToolsSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Text('🛠 工具执行',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                  const Spacer(),
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('关闭')),
+  void _closeFloating() => setState(() => _floatingPanel = null);
+
+  Widget _buildFloatingPanel() {
+    final isThinking = _floatingPanel == 'thinking';
+    return Positioned.fill(
+      child: GestureDetector(
+        onTap: _closeFloating,
+        child: Container(
+          color: Colors.black38,
+          alignment: Alignment.center,
+          child: GestureDetector(
+            onTap: () {},
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.9,
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.6,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, 6)),
                 ],
               ),
-              const SizedBox(height: 8),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final t in _turnTools.values.toList())
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: ToolCard(part: t),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
+                    child: Row(
+                      children: [
+                        Text(
+                          isThinking ? '💭 思考过程' : '🛠 工具执行',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1F2328)),
                         ),
-                    ],
+                        const Spacer(),
+                        IconButton(
+                          onPressed: _closeFloating,
+                          icon: const Icon(Icons.close, color: Color(0xFF57606A)),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                      child: isThinking
+                          ? SelectableText(
+                              _turnReasoning.values.join('\n'),
+                              style: const TextStyle(
+                                  fontSize: 13, height: 1.6, color: Color(0xFF57606A)),
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (final t in _turnTools.values.toList())
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: ToolCard(part: t),
+                                  ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -363,7 +362,9 @@ class _ChatScreenState extends State<ChatScreen> {
       '出错' => Colors.red,
       _ => Colors.green,
     };
-    return Scaffold(
+    return Stack(
+      children: [
+        Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -396,19 +397,22 @@ class _ChatScreenState extends State<ChatScreen> {
             IconButton(
               tooltip: '查看思考过程',
               icon: Opacity(
-                opacity: _reasoningDone ? 0.6 : 1.0,
-                child: const Text('💭', style: TextStyle(fontSize: 15)),
+                opacity: _reasoningDone ? 0.7 : 1.0,
+                child: const Icon(Icons.psychology_alt,
+                    size: 20, color: Color(0xFF0A2540)),
               ),
-              onPressed: () => _showThinkingSheet(),
+              onPressed: () => _toggleFloating('thinking'),
             ),
           if (_turnTools.isNotEmpty)
             IconButton(
               tooltip: '查看工具执行',
               icon: Badge(
+                backgroundColor: const Color(0xFF0A2540),
                 label: Text('${_turnTools.length}'),
-                child: const Text('🛠', style: TextStyle(fontSize: 15)),
+                child: const Icon(Icons.build,
+                    size: 18, color: Color(0xFF0A2540)),
               ),
-              onPressed: () => _showToolsSheet(),
+              onPressed: () => _toggleFloating('tools'),
             ),
           if (_state == '运行中')
             TextButton(
@@ -484,6 +488,9 @@ class _ChatScreenState extends State<ChatScreen> {
       bottomSheet: _permission != null
           ? PermissionCard(permission: _permission!, onRespond: _respond)
           : null,
+        ),
+        if (_floatingPanel != null) _buildFloatingPanel(),
+      ],
     );
   }
 }
