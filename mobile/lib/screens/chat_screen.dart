@@ -97,7 +97,7 @@ class _ChatScreenState extends State<ChatScreen> {
             _state = '运行中';
             _applyPart(Part.fromJson(part.cast<String, dynamic>()));
           });
-          _scrollToBottom();
+          // reverse 列表自动锚定底部，无需滚动（避免抖动）
         }
         break;
       case 'permission.asked':
@@ -292,7 +292,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       controller: _input,
                       minLines: 1,
                       maxLines: 4,
-                      enabled: _state != '运行中',
+                      // 运行中也保持可用（键盘不收起，可提前输入下一条）
                       decoration: const InputDecoration(
                         hintText: '给电脑上的 opencode 下指令…',
                         border: OutlineInputBorder(
