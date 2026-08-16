@@ -2,6 +2,8 @@
 
 > Control the AI coding agents on your computer from your phone. Account system + cloud relay: install the desktop app and the mobile app, log in with the same account, and your phone can see your computers, dispatch tasks, approve permissions, and watch progress in real time — from anywhere, not just your LAN.
 
+> 中文版: [README_zh.md](README_zh.md)
+
 ## ✨ Features
 
 - 📱 **Mobile app (Flutter)**: Login → device list → sessions → real-time chat; commands go straight from your phone to your computer
