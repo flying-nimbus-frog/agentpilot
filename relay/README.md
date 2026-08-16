@@ -20,7 +20,19 @@ RELAY_PORT=8080 .venv/bin/python main.py
 
 ```bash
 # 首次（含克隆代码 + 生成密钥 + 拉起，依赖走国内镜像）
-git clone https://github.com/你的用户名/agentpilot.git && cd agentpilot/relay && echo "RELAY_JWT_SECRET=$(openssl rand -hex 32)" > .env && docker compose up -d --build
+git clone https://github.com/flying-nimbus-frog/agentpilot.git && cd agentpilot/relay \
+  && cp .env.example .env \
+  && sed -i "s/RELAY_JWT_SECRET=.*/RELAY_JWT_SECRET=$(openssl rand -hex 32)/" .env \
+  && docker compose up -d --build
+```
+
+`.env.example` 是配置模板（所有可配置项+注释），复制为 `.env` 后填写真实值：
+
+- **必填**：`RELAY_JWT_SECRET`（JWT 签名密钥）
+- **可选**：`RELAY_PORT`、`RELAY_CORS`、`RELAY_DB`
+- **邮件**（邮箱验证/密码找回）：`RELAY_SMTP_HOST/PORT/USER/PASS`、`RELAY_MAIL_FROM`、`RELAY_PUBLIC_BASE`
+
+> `.env` 已被 `.gitignore` 排除，永远不会提交到仓库。
 
 # 之后重启/更新
 docker compose up -d --build
