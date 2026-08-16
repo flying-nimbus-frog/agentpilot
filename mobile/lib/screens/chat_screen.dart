@@ -211,6 +211,89 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  // ---------- 悬浮详情 ----------
+
+  void _showThinkingSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text('🧠 思考过程',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('关闭')),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    _turnReasoning.values.join('\n'),
+                    style: const TextStyle(
+                        fontSize: 13, height: 1.6, color: Color(0xFF57606A)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showToolsSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text('🛠 工具执行',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('关闭')),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final t in _turnTools.values.toList())
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: ToolCard(part: t),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty || _state == '运行中') return;
@@ -291,6 +374,25 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
         actions: [
+          // 回合状态图标：思考/工具执行，点击弹出悬浮详情
+          if (_turnReasoning.isNotEmpty || _state == '运行中')
+            IconButton(
+              tooltip: '查看思考过程',
+              icon: Opacity(
+                opacity: _reasoningDone ? 0.6 : 1.0,
+                child: const Text('🧠', style: TextStyle(fontSize: 15)),
+              ),
+              onPressed: () => _showThinkingSheet(),
+            ),
+          if (_turnTools.isNotEmpty)
+            IconButton(
+              tooltip: '查看工具执行',
+              icon: Badge(
+                label: Text('${_turnTools.length}'),
+                child: const Text('🛠', style: TextStyle(fontSize: 15)),
+              ),
+              onPressed: () => _showToolsSheet(),
+            ),
           if (_state == '运行中')
             TextButton(
               onPressed: _abort,
@@ -320,22 +422,6 @@ class _ChatScreenState extends State<ChatScreen> {
                         parts: _messages[_messages.length - 1 - i].parts),
                   ),
           ),
-          // 回合级思考条：一次对话一条（固定位置，不随消息滚动）
-          if (_turnReasoning.isNotEmpty || _turnTools.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
-              child: Column(
-                children: [
-                  if (_turnReasoning.isNotEmpty)
-                    ReasoningStrip(
-                      text: _turnReasoning.values.join('\n'),
-                      thinking: !_reasoningDone,
-                    ),
-                  if (_turnTools.isNotEmpty)
-                    ToolSummaryStrip(tools: _turnTools.values.toList()),
-                ],
-              ),
-            ),
           SafeArea(
             top: false,
             child: Container(
