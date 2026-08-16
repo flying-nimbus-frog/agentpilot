@@ -164,10 +164,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.animateTo(_scroll.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
-      }
+      if (!_scroll.hasClients) return;
+      // reverse 列表：offset 0 = 最新消息在底部
+      _scroll.animateTo(0,
+          duration: const Duration(milliseconds: 150), curve: Curves.easeOut);
     });
   }
 
@@ -269,10 +269,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : ListView.builder(
                     controller: _scroll,
+                    reverse: true, // 底部锚定：新消息/键盘弹出都不遮挡最新内容
                     padding: const EdgeInsets.all(14),
                     itemCount: _messages.length,
                     itemBuilder: (_, i) => MessageBubble(
-                        role: _messages[i].role, parts: _messages[i].parts),
+                        role: _messages[_messages.length - 1 - i].role,
+                        parts: _messages[_messages.length - 1 - i].parts),
                   ),
           ),
           SafeArea(
