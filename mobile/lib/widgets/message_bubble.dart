@@ -87,6 +87,16 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = role == 'user';
+    // 合并同一消息的所有思考 part 为一条（折叠单行）
+    final reasoningText = parts
+        .where((p) => p.type == 'reasoning')
+        .map((p) => p.text ?? '')
+        .where((t) => t.isNotEmpty)
+        .join('\n');
+    final toolParts = parts.where((p) => p.isTool).toList();
+    final textParts = parts
+        .where((p) => p.type == 'text' && (p.text ?? '').isNotEmpty)
+        .toList();
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -100,20 +110,17 @@ class MessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (parts.isEmpty)
+            if (parts.isEmpty && reasoningText.isEmpty && toolParts.isEmpty && textParts.isEmpty)
               const Text('…', style: TextStyle(color: Colors.grey)),
-            for (final p in parts)
-              if (p.isTool)
-                ToolCard(part: p)
-              else if (p.type == 'reasoning')
-                ReasoningStrip(part: p)
-              else if (p.type == 'text' && (p.text ?? '').isNotEmpty)
-                Text(p.text!,
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.5,
-                      color: isUser ? Colors.white : const Color(0xFF1F2328),
-                    )),
+            if (reasoningText.isNotEmpty) ReasoningStrip(text: reasoningText),
+            for (final p in toolParts) ToolCard(part: p),
+            for (final p in textParts)
+              Text(p.text!,
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.5,
+                    color: isUser ? Colors.white : const Color(0xFF1F2328),
+                  )),
           ],
         ),
       ),
@@ -123,8 +130,8 @@ class MessageBubble extends StatelessWidget {
 
 /// 思考内容：折叠为单行横向滚动条，点击展开/收起
 class ReasoningStrip extends StatefulWidget {
-  final Part part;
-  const ReasoningStrip({super.key, required this.part});
+  final String text;
+  const ReasoningStrip({super.key, required this.text});
 
   @override
   State<ReasoningStrip> createState() => _ReasoningStripState();
@@ -142,7 +149,7 @@ class _ReasoningStripState extends State<ReasoningStrip> {
 
   @override
   Widget build(BuildContext context) {
-    final text = widget.part.text ?? '';
+    final text = widget.text;
     final thinking = text.isEmpty;
     final label = _expanded
         ? '收起思考'
@@ -164,8 +171,7 @@ class _ReasoningStripState extends State<ReasoningStrip> {
           children: [
             Row(
               children: [
-                const Text('🧠',
-                    style: TextStyle(fontSize: 12)),
+                const Text('🧠', style: TextStyle(fontSize: 12)),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(label,

@@ -90,6 +90,10 @@ class _ChatScreenState extends State<ChatScreen> {
     if (sid != _sid) return;
     _lastEvent = DateTime.now();
     switch (ev['type']) {
+      case 'message.created':
+      case 'message.updated':
+        _onMessageMeta(props);
+        break;
       case 'message.part.updated':
         final part = props['part'];
         if (part is Map) {
@@ -127,23 +131,25 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// 按 part.id 更新消息内容（text 为累计全文）。
+  /// 按 messageID 归组更新消息（同一消息的所有 part 合并进一个气泡）
   void _applyPart(Part part) {
-    final mid = part.id?.isEmpty ?? true ? null : part.id;
+    final mid = (part.messageID?.isNotEmpty ?? false) ? part.messageID : null;
     Message? target;
     int targetIdx = -1;
     for (var i = 0; i < _messages.length; i++) {
       if (_messages[i].id == mid ||
-          _messages[i].parts.any((p) => p.id == part.id)) {
+          (mid == null && _messages[i].parts.any((p) => p.id == part.id))) {
         target = _messages[i];
         targetIdx = i;
         break;
       }
     }
     if (target == null) {
-      // 新消息（assistant 或用户消息的流式 part）
-      final role = part.type == 'text' && (part.text ?? '').isNotEmpty ? _lastRole() : 'assistant';
-      _messages = [..._messages, Message(id: mid ?? '', role: role, parts: [part])];
+      // 新消息：role 由 message.created 事件保证（见 _onMessageMeta），兜底用 _lastRole
+      _messages = [
+        ..._messages,
+        Message(id: mid ?? '', role: _lastRole(), parts: [part])
+      ];
       return;
     }
     final parts = List<Part>.from(target.parts);
@@ -154,6 +160,24 @@ class _ChatScreenState extends State<ChatScreen> {
       parts.add(part);
     }
     _messages[targetIdx] = Message(id: target.id, role: target.role, parts: parts);
+  }
+
+  /// message.created/updated 事件：记录消息 role，确保用户/助手消息在正确一侧
+  void _onMessageMeta(Map<String, dynamic> props) {
+    final info = props['info'];
+    if (info is Map && info['id'] is String) {
+      final id = info['id'] as String;
+      final role = info['role'] as String? ?? 'assistant';
+      setState(() {
+        final i = _messages.indexWhere((m) => m.id == id);
+        if (i >= 0) {
+          final m = _messages[i];
+          _messages[i] = Message(id: id, role: role, parts: m.parts);
+        } else {
+          _messages = [..._messages, Message(id: id, role: role, parts: [])];
+        }
+      });
+    }
   }
 
   String _lastRole() {

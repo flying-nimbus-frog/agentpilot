@@ -94,6 +94,7 @@ class Part {
   final String type;
   final String? text;
   final String? tool;
+  final String? messageID;
   final dynamic state;
   final dynamic input;
 
@@ -102,6 +103,7 @@ class Part {
     required this.type,
     this.text,
     this.tool,
+    this.messageID,
     this.state,
     this.input,
   });
@@ -111,6 +113,7 @@ class Part {
         type: j['type'] as String? ?? 'text',
         text: j['text'] as String?,
         tool: j['tool'] as String?,
+        messageID: j['messageID'] as String?,
         state: j['state'],
         input: j['input'],
       );
