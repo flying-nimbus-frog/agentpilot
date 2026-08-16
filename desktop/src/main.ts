@@ -254,6 +254,7 @@ $("btn-agent-start").onclick = async () => {
   const model = ($("in-model") as HTMLInputElement).value.trim();
   const dir = ($("in-agent-dir") as HTMLInputElement).value.trim();
   const permission = ($("in-permission") as HTMLInputElement).value.trim() || null;
+  const opencodeModel = ($("in-opencode-model") as HTMLInputElement).value.trim();
   if (mode === "mini" && !apiKey) {
     $("agent-msg").textContent = "❌ 请先填写 API Key";
     $("agent-msg").style.color = "#cf222e";
@@ -266,9 +267,9 @@ $("btn-agent-start").onclick = async () => {
   }
   try {
     $("agent-msg").textContent = "⏳ 正在启动…";
-    const r = (await invoke("agent_start", { mode, apiBase, apiKey, model, dir, permission })) as { engine: string; model?: string };
+    const r = (await invoke("agent_start", { mode, apiBase, apiKey, model: mode === "opencode" ? opencodeModel : model, dir, permission })) as { engine: string; model?: string };
     st.agentRunning = true;
-    st.agentModel = r.engine === "opencode" ? "opencode" : (r.model || "");
+    st.agentModel = r.engine === "opencode" ? (opencodeModel || "opencode(默认)") : (r.model || "");
     $("agent-msg").textContent = r.engine === "opencode" ? "✅ opencode 已嵌入并启动（日志已接入）" : `✅ MiniAgent 启动成功 (${r.model})`;
     $("agent-msg").style.color = "#1a7f37";
     refreshStatus();
@@ -306,6 +307,7 @@ async function init() {
     if (settings.api_key) ($("in-api-key") as HTMLInputElement).value = settings.api_key;
     if (settings.model) ($("in-model") as HTMLInputElement).value = settings.model;
     if (settings.agent_dir) ($("in-agent-dir") as HTMLInputElement).value = settings.agent_dir;
+    if (settings.opencode_model) ($("in-opencode-model") as HTMLInputElement).value = settings.opencode_model;
     if (settings.permission) ($("in-permission") as HTMLInputElement).value = settings.permission;
     if (settings.agent_mode) {
       const r = document.querySelector(`input[name="agent-mode"][value="${settings.agent_mode}"]`) as HTMLInputElement;

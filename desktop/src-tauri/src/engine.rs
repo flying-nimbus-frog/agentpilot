@@ -189,6 +189,7 @@ pub async fn run(
                         Some(rx) => Box::pin(rx.recv()),
                         None => Box::pin(std::future::ready(None)),
                     };
+                let forced_model = s.opencode_model.clone();
                 let ping_fut: std::pin::Pin<Box<dyn Future<Output = bool> + Send>> =
                     match ping_interval.as_mut() {
                         Some(iv) => Box::pin(async move {
@@ -200,7 +201,7 @@ pub async fn run(
                 tokio::select! {
                     msg = recv_relay => {
                         match msg {
-                            Some(v) => handle_relay_msg(&app, sink, &v, &mini, &opencode, &mode, &agent_tx).await,
+                            Some(v) => handle_relay_msg(&app, sink, &v, &mini, &opencode, &mode, &agent_tx, forced_model.clone()).await,
                             None => disconnected = true,
                         }
                     }
@@ -243,6 +244,7 @@ async fn handle_relay_msg(
     opencode: &Arc<Mutex<OpenCodeAgent>>,
     mode: &Arc<AtomicU8>,
     agent_tx: &mpsc::UnboundedSender<Value>,
+    forced_model: String,
 ) {
     let t = msg.get("type").and_then(|v| v.as_str()).unwrap_or("");
     match t {
@@ -276,6 +278,7 @@ async fn handle_relay_msg(
             let mini_c = Arc::clone(mini);
             let opencode_c = Arc::clone(opencode);
             let mode_v = mode.load(Ordering::Relaxed);
+            let forced_model = forced_model.clone();
             let tx = agent_tx.clone();
             let id_task = id.clone();
             let method_task = method.clone();
@@ -285,7 +288,7 @@ async fn handle_relay_msg(
                 let id = id_task;
                 let data: Result<Value, String> = if mode_v == MODE_OPENCODE {
                     let body = inject_concise(&method_task, &path_task, body);
-                    opencode_request(&opencode_c, &method_task, &path_task, body).await
+                    opencode_request(&opencode_c, &method_task, &path_task, body, forced_model.clone()).await
                 } else {
                     dispatch(mini_c, &method_task, &path_task, body, tx)
                 };
@@ -430,10 +433,22 @@ async fn opencode_request(
     method: &str,
     path: &str,
     body: Option<Value>,
+    forced_model: String,
 ) -> Result<Value, String> {
     let mut oc = opencode.lock().await;
     if !oc.running() {
         return Err("opencode 未启动".into());
+    }
+    // 强制指定模型：在 prompt 请求中注入 model 字段，避免使用 opencode 默认模型
+    let mut body = body;
+    if !forced_model.is_empty() && path.ends_with("/prompt_async") {
+        if let Some(b) = body.as_mut() {
+            if b.get("model").is_none() {
+                b["model"] = json!(forced_model);
+            }
+        } else {
+            body = Some(json!({"model": forced_model}));
+        }
     }
     let r = oc.request(method, path, body).await?;
     if r.get("ok").and_then(|o| o.as_bool()).unwrap_or(false) {

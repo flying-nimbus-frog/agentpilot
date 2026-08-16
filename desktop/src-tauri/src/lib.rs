@@ -149,9 +149,12 @@ async fn device_unbind(app: AppHandle, state: State<'_, AppState>) -> Result<(),
 #[tauri::command]
 async fn agent_detect(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let m = state.mode.load(Ordering::Relaxed);
+    let s = state.store.get();
     Ok(json!({
         "type": if m == MODE_OPENCODE { "opencode" } else { "mini-agent" },
-        "model": if m == MODE_OPENCODE { "opencode".to_string() } else { state.mini.model_name() },
+        "model": if m == MODE_OPENCODE {
+            if s.opencode_model.is_empty() { "opencode默认(未指定)".to_string() } else { s.opencode_model.clone() }
+        } else { state.mini.model_name() },
         "configured": if m == MODE_OPENCODE {
             state.opencode.lock().await.running()
         } else {
@@ -180,6 +183,9 @@ async fn agent_start(
             }
             if let Some(p) = &permission {
                 cfg.permission = Some(p.clone());
+            }
+            if !model.trim().is_empty() {
+                cfg.opencode_model = model.trim().into();
             }
         });
         let mut oc = state.opencode.lock().await;

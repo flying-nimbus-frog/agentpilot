@@ -25,6 +25,8 @@ pub struct Settings {
     pub model: String,
     #[serde(default)]
     pub agent_mode: String,
+    #[serde(default)]
+    pub opencode_model: String,
 }
 
 impl Settings {

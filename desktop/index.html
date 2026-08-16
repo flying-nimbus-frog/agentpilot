@@ -84,6 +84,9 @@
         <div id="cfg-opencode" class="hidden">
           <label>工作目录</label>
           <input id="in-agent-dir" placeholder="/Users/you/projects" />
+          <label>模型（必填，费用透明）</label>
+          <input id="in-opencode-model" placeholder="deepseek/deepseek-v4-flash" />
+          <p class="dim">格式 provider/model，不填则使用 opencode 默认模型（可能产生未知费用）</p>
           <label>权限配置（可选，JSON）</label>
           <textarea id="in-permission" rows="2" placeholder='{"bash":"ask"}'></textarea>
         </div>
