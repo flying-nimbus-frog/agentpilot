@@ -20,6 +20,13 @@ services:
       RELAY_DB: /data/relay.db
       # Web/浏览器调试需要 CORS（原生手机 App 不受影响，可设 RELAY_CORS=0 关闭）
       RELAY_CORS: ${RELAY_CORS:-1}
+      # SMTP 邮件（邮箱验证/密码找回），不配置则链接打印到日志
+      RELAY_SMTP_HOST: ${RELAY_SMTP_HOST:-}
+      RELAY_SMTP_PORT: ${RELAY_SMTP_PORT:-465}
+      RELAY_SMTP_USER: ${RELAY_SMTP_USER:-}
+      RELAY_SMTP_PASS: ${RELAY_SMTP_PASS:-}
+      RELAY_MAIL_FROM: ${RELAY_MAIL_FROM:-}
+      RELAY_PUBLIC_BASE: ${RELAY_PUBLIC_BASE:-https://relay.zhileai.net}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
