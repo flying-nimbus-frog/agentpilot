@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../api/protocol.dart';
 
@@ -114,13 +115,48 @@ class MessageBubble extends StatelessWidget {
               const Text('…', style: TextStyle(color: Colors.grey)),
             if (reasoningText.isNotEmpty) ReasoningStrip(text: reasoningText),
             for (final p in toolParts) ToolCard(part: p),
-            for (final p in textParts)
-              Text(p.text!,
-                  style: TextStyle(
-                    fontSize: 15,
-                    height: 1.5,
-                    color: isUser ? Colors.white : const Color(0xFF1F2328),
-                  )),
+            if (textParts.isNotEmpty)
+              isUser
+                  ? Text(
+                      textParts.map((p) => p.text!).join('\n'),
+                      style: const TextStyle(
+                          fontSize: 15, height: 1.5, color: Colors.white),
+                    )
+                  : MarkdownBody(
+                      data: textParts.map((p) => p.text!).join('\n'),
+                      styleSheet: MarkdownStyleSheet(
+                        p: const TextStyle(
+                            fontSize: 15, height: 1.5, color: Color(0xFF1F2328)),
+                        strong: const TextStyle(
+                            fontWeight: FontWeight.w700, color: Color(0xFF1F2328)),
+                        code: const TextStyle(
+                            fontSize: 13,
+                            fontFamily: 'monospace',
+                            color: Color(0xFF24292F),
+                            backgroundColor: Color(0xFFE8ECF0)),
+                        codeblockDecoration: BoxDecoration(
+                          color: const Color(0xFF0D1117),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        codeblockPadding: const EdgeInsets.all(10),
+                        blockquoteDecoration: BoxDecoration(
+                          color: const Color(0xFFE8ECF0),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        h1: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1F2328)),
+                        h2: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1F2328)),
+                        h3: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1F2328)),
+                        listBullet: const TextStyle(color: Color(0xFF57606A)),
+                        blockquote: const TextStyle(color: Color(0xFF57606A)),
+                        horizontalRuleDecoration: const BoxDecoration(
+                          border: Border(top: BorderSide(color: Color(0xFFD0D7DE))),
+                        ),
+                      ),
+                      selectable: true,
+                    ),
           ],
         ),
       ),
