@@ -273,11 +273,34 @@ pub fn run() {
                 opencode: Arc::clone(&opencode),
                 mode: Arc::clone(&mode),
             });
+            // Agent 自动启动：应用启动即拉起上次配置的引擎（无需手动点"启动"）
+            let app_a = handle.clone();
+            let store_a = Arc::clone(&store);
+            let mini_a = Arc::clone(&mini);
+            let opencode_a = Arc::clone(&opencode);
+            let mode_a = Arc::clone(&mode);
             // 后台引擎
             let app2 = handle.clone();
             let store2 = Arc::clone(&store);
             tauri::async_runtime::spawn(async move {
                 engine::run(app2, store2, mini, opencode, mode).await;
+            });
+            tauri::async_runtime::spawn(async move {
+                let s = store_a.get();
+                if s.agent_mode == "opencode" && !s.agent_dir.is_empty() {
+                    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+                    let mut oc = opencode_a.lock().await;
+                    match oc.start(&s.agent_dir, s.permission.as_deref(), app_a.clone()).await {
+                        Ok(()) => engine::log_event(&app_a, "🤖 opencode 已自动启动"),
+                        Err(e) => engine::log_event(
+                            &app_a,
+                            format!("⚠️ opencode 自动启动失败（可在 Agent 页手动启动）: {e}"),
+                        ),
+                    }
+                    drop(oc);
+                    engine::emit_status(&app_a, &store_a, &mini_a, &opencode_a, &mode_a, false)
+                        .await;
+                }
             });
             Ok(())
         })
