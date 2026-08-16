@@ -105,6 +105,8 @@ class MessageBubble extends StatelessWidget {
             for (final p in parts)
               if (p.isTool)
                 ToolCard(part: p)
+              else if (p.type == 'reasoning')
+                ReasoningStrip(part: p)
               else if (p.type == 'text' && (p.text ?? '').isNotEmpty)
                 Text(p.text!,
                     style: TextStyle(
@@ -112,6 +114,87 @@ class MessageBubble extends StatelessWidget {
                       height: 1.5,
                       color: isUser ? Colors.white : const Color(0xFF1F2328),
                     )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 思考内容：折叠为单行横向滚动条，点击展开/收起
+class ReasoningStrip extends StatefulWidget {
+  final Part part;
+  const ReasoningStrip({super.key, required this.part});
+
+  @override
+  State<ReasoningStrip> createState() => _ReasoningStripState();
+}
+
+class _ReasoningStripState extends State<ReasoningStrip> {
+  bool _expanded = false;
+  final _scrollCtrl = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = widget.part.text ?? '';
+    final thinking = text.isEmpty;
+    final label = _expanded
+        ? '收起思考'
+        : thinking
+            ? '🤔 思考中…'
+            : '🧠 已思考 · 点击展开';
+    return GestureDetector(
+      onTap: () => setState(() => _expanded = !_expanded),
+      child: Container(
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAF2FF),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFB6D4FF)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('🧠',
+                    style: TextStyle(fontSize: 12)),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(label,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1F6FEB))),
+                ),
+              ],
+            ),
+            if (text.isNotEmpty)
+              _expanded
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(text,
+                          style: const TextStyle(
+                              fontSize: 13, height: 1.5, color: Color(0xFF57606A))),
+                    )
+                  : SingleChildScrollView(
+                      controller: _scrollCtrl,
+                      scrollDirection: Axis.horizontal,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(text,
+                            maxLines: 1,
+                            style: const TextStyle(
+                                fontSize: 12, color: Color(0xFF57606A))),
+                      ),
+                    ),
           ],
         ),
       ),
