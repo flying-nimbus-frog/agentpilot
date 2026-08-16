@@ -239,15 +239,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildFloatingPanel() {
     final isThinking = _floatingPanel == 'thinking';
+    // 避让键盘：键盘弹出时面板整体上移，不被遮挡
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return Positioned.fill(
       child: GestureDetector(
         onTap: _closeFloating,
         child: Container(
           color: Colors.black38,
           alignment: Alignment.center,
-          child: GestureDetector(
-            onTap: () {},
-            child: Container(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: GestureDetector(
+              onTap: () {},
+              child: Container(
               width: MediaQuery.of(context).size.width * 0.9,
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.6,
@@ -303,6 +307,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ],
               ),
+            ),
             ),
           ),
         ),
