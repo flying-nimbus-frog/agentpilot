@@ -27,6 +27,8 @@ services:
       RELAY_SMTP_PASS: ${RELAY_SMTP_PASS:-}
       RELAY_MAIL_FROM: ${RELAY_MAIL_FROM:-}
       RELAY_PUBLIC_BASE: ${RELAY_PUBLIC_BASE:-https://relay.zhileai.net}
+      # 套餐授权回调密钥（支付平台 webhook 对接用）
+      RELAY_PLAN_SECRET: ${RELAY_PLAN_SECRET:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s

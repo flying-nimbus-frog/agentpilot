@@ -48,6 +48,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1")
         if "session_version" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0")
+        if "plan" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'")
+        if "plan_expires" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN plan_expires INTEGER NOT NULL DEFAULT 0")
         cols = {r[1] for r in conn.execute("PRAGMA table_info(devices)")}
         if "status" not in cols:
             conn.execute("ALTER TABLE devices ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
@@ -70,6 +74,28 @@ def create_user(email: str, password_hash: str, salt: str) -> dict:
         except sqlite3.IntegrityError:
             return None
     return {"id": uid, "email": email}
+
+
+def set_plan(user_id: str, plan: str, months: int) -> None:
+    """设置/续费套餐。months>0 时在当前到期时间上累加。"""
+    import time as _t
+    with _conn() as conn:
+        row = conn.execute("SELECT plan_expires FROM users WHERE id=?", (user_id,)).fetchone()
+        base = row["plan_expires"] if row and row["plan_expires"] > int(_t.time() * 1000) else int(_t.time() * 1000)
+        conn.execute(
+            "UPDATE users SET plan=?, plan_expires=? WHERE id=?",
+            (plan, base + months * 30 * 24 * 3600 * 1000, user_id),
+        )
+
+
+def count_bound_devices(user_id: str) -> int:
+    """统计占用额度的设备（pending 待配对 + active 已激活）。"""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM devices WHERE user_id=? AND status IN ('pending','active')",
+            (user_id,),
+        ).fetchone()
+    return row["n"]
 
 
 def mark_email_verified(user_id: str) -> bool:

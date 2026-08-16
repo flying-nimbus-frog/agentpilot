@@ -41,6 +41,9 @@ if os.environ.get("RELAY_CORS") == "1":
 dotenv.load_dotenv()
 
 HEARTBEAT_TIMEOUT = 90  # 秒，超过视为离线
+FREE_DEVICE_LIMIT = 1   # 免费套餐可绑定的设备数
+
+PLAN_SECRET = os.environ.get("RELAY_PLAN_SECRET", "")
 PAIRING_TTL_SEC = 600   # 配对码有效期
 PAIRING_MAX_TRIES = 3   # 配对码最多尝试次数
 
@@ -71,6 +74,13 @@ class DeviceIn(BaseModel):
 
 class ForgotIn(BaseModel):
     email: str
+
+
+class PlanGrantIn(BaseModel):
+    secret: str
+    email: str
+    plan: str = "pro"
+    months: int = 1
 
 
 class ResetIn(BaseModel):
@@ -143,6 +153,8 @@ def login(body: LoginIn, request: Request):
             "id": user["id"],
             "email": user["email"],
             "emailVerified": bool(user["email_verified"]),
+            "plan": user["plan"],
+            "planExpires": user["plan_expires"],
         },
     }
 
@@ -163,6 +175,35 @@ def _require_user(authorization: str | None) -> dict:
     if payload.get("ver", 0) != user["session_version"]:
         raise HTTPException(401, "Session revoked, please log in again")
     return user
+
+
+@app.get("/api/plan")
+def api_plan(authorization: str | None = Header(None)):
+    """查询当前套餐。"""
+    user = _require_user(authorization)
+    limit = FREE_DEVICE_LIMIT if user["plan"] != "pro" else -1
+    return {
+        "plan": user["plan"],
+        "planExpires": user["plan_expires"],
+        "deviceLimit": limit,
+        "activeDevices": db.count_bound_devices(user["id"]),
+    }
+
+
+@app.post("/api/plan/grant")
+def api_plan_grant(body: PlanGrantIn):
+    """套餐授权回调（由支付平台/管理端调用）。
+
+    对接流程：支付平台 webhook → 这里校验 RELAY_PLAN_SECRET → 更新用户套餐。
+    body: { secret, email, plan, months }
+    """
+    if not PLAN_SECRET or body.secret != PLAN_SECRET:
+        raise HTTPException(401, "Invalid secret")
+    user = db.get_user_by_email(body.email.strip().lower())
+    if not user:
+        raise HTTPException(404, "User not found")
+    db.set_plan(user["id"], body.plan, body.months)
+    return {"ok": True, "plan": body.plan}
 
 
 @app.get("/api/verify", response_class=HTMLResponse)
@@ -256,6 +297,11 @@ async def api_devices_list(authorization: str | None = Header(None)):
 def api_devices_register(body: DeviceIn, authorization: str | None = Header(None)):
     """电脑端登录后申请设备绑定：返回配对码，手机确认后生效。"""
     user = _require_user(authorization)
+    # 免费套餐设备数限制
+    plan = user["plan"]
+    limit = FREE_DEVICE_LIMIT if plan != "pro" else 999
+    if db.count_bound_devices(user["id"]) >= limit:
+        raise HTTPException(403, "Free plan allows 1 device. Upgrade to Pro for unlimited devices.")
     code = f"{secrets.randbelow(10)}{secrets.randbelow(10)}{secrets.randbelow(10)}{secrets.randbelow(10)}{secrets.randbelow(10)}{secrets.randbelow(10)}"
     dev = db.create_pending_device(user["id"], body.name, code, PAIRING_TTL_SEC)
     return {
@@ -297,6 +343,11 @@ def api_devices_pair_by_code(
             if now > dev["pairing_expires"]:
                 db.delete_device(user["id"], dev["id"])
                 raise HTTPException(410, "Pairing code expired, please re-register on the computer")
+            # 免费套餐兜底：激活时再查一次额度
+            plan = user["plan"]
+            limit = FREE_DEVICE_LIMIT if plan != "pro" else 999
+            if db.count_bound_devices(user["id"]) >= limit:
+                raise HTTPException(403, "Free plan allows 1 device. Upgrade to Pro for unlimited devices.")
             result = db.activate_pending_device(dev["id"], user["id"])
             if not result:
                 raise HTTPException(409, "Device state error")
