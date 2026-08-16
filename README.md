@@ -1,48 +1,88 @@
-# OpenCode Remote V2 · 手机遥控电脑上的 opencode
+# AgentPilot · 手机遥控电脑上的 AI Agent
 
-> 账号体系 + 云端中继。手机 App 登录账号 → 看到你的电脑 → 指挥 opencode 干活，权限请求在手机上审批。任何网络环境可用，不限局域网。
+> 在手机上指挥电脑上的 AI Agent 干活。账号体系 + 云端中继：装好桌面端和手机端，登录同一个账号，手机就能看到你的电脑、下发任务、审批权限、实时查看进度——任何网络环境可用，不限局域网。
 
-## 架构
+## ✨ 特性
+
+- 📱 **手机端（Flutter）**：登录 → 设备列表 → 会话 → 实时聊天，指令从手机直达电脑
+- 🖥️ **桌面端（Tauri）**：账号/设备配对管理、Agent 引擎管理、**全量运行日志**
+- 🤖 **多 Agent 引擎**：内置 MiniAgent（直连模型）/ 嵌入 opencode（完整工具能力），驱动层可扩展
+- 🔐 **安全**：设备级配对（6 位配对码）、账号隔离、TLS 全链路、登录限流
+- 🧠 **思考过程可见**：模型推理内容折叠展示，工具执行详情按需展开
+- 🌐 **任何网络**：手机 4G/5G/WiFi 都能连，不需要同一局域网
+
+## 🚀 快速开始
+
+### 方式一：使用托管中继（无需部署，推荐）
+
+项目提供官方中继服务，你只需要**客户端**：
 
 ```
-[手机 App (Flutter)] ─HTTPS/WSS─▶ [云端中继 relay (Python/FastAPI)] ◀─WSS── [电脑端伴侣 companion (Python)]
-                                      账号体系 · 设备在线 · 指令路由 · 事件广播
-                                                                          │
-                                                                   opencode serve (本机)
+1. 电脑：安装桌面端应用 → 注册账号 → 登录
+2. 电脑：Agent 页选择引擎（opencode / MiniAgent）→ 启动
+3. 电脑：设备页「注册本机为设备」→ 记下 6 位配对码
+4. 手机：安装 App → 登录同一账号 → 找到待配对设备 → 输入配对码
+5. 完成：手机下发指令，电脑执行，权限在手机上审批
 ```
 
-## 快速开始
+> 会话、代码、Agent 数据全部在你的电脑本地，中继只做路由转发，不存储你的业务内容。
+
+### 方式二：自托管中继（Docker 一条命令）
 
 ```bash
-# 1. 服务器（relay）— 部署到你的云服务器，见 relay/README.md
-# 2. 电脑端（companion）
-cd companion && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python main.py login --relay wss://你的服务器 --email 你@邮箱 --password 密码
-.venv/bin/python main.py run
-# 3. 手机端（Flutter）— 见 mobile/README.md，flutter run 后登录同一账号
+git clone https://github.com/你的用户名/agentpilot.git && cd agentpilot/relay \
+  && echo "RELAY_JWT_SECRET=$(openssl rand -hex 32)" > .env \
+  && docker compose up -d --build
 ```
 
-## 目录
+详见 `relay/README.md`（含 nginx 反代、HTTPS、systemd 部署）。
 
-| 路径 | 说明 |
-|------|------|
-| `DESIGN.md` | V2 设计文档 |
-| `PROTOCOL.md` | 三方通信协议契约（手机端实现者必读） |
-| `relay/` | 云端中继（FastAPI + WS + SQLite 账号体系），含部署文档与自测脚本 |
-| `companion/` | 电脑端伴侣守护进程（Python asyncio），含 macOS 开机自启 |
-| `mobile/` | 手机端 Flutter App（登录/设备/会话/聊天/权限审批） |
-| `v1-expo/` | v1 局域网方案归档（废弃，其 opencode 协议实测经验已复用） |
-
-## 已实测通过（本地全链路）
+## 🏗️ 架构
 
 ```
-手机模拟 → 登录 → 设备在线 → 会话列表 → 新建会话 → 发消息 → 流式回复 'OK'
-        → bash 触发权限请求 → 手机响应 once → 授权生效 → 任务完成
+手机App ──HTTPS/WSS──▶ 云端中继 relay ◀──WSS── 桌面端（Agent 引擎）
+  Flutter              Python/FastAPI        Tauri + opencode/MiniAgent
+                          │
+                  账号体系 · 设备配对 · 指令路由 · 事件广播 · 状态心跳
 ```
 
-## 安全
+| 组件 | 目录 | 技术 | 职责 |
+|------|------|------|------|
+| 中继 | `relay/` | Python + FastAPI + WebSocket | 账号、设备配对、路由、状态 |
+| 桌面端 | `desktop/` | Tauri (Rust + Web) | 设备管理、Agent 引擎、日志 |
+| 手机端 | `mobile/` | Flutter | 遥控界面、审批 |
+| 协议 | `PROTOCOL.md` | WebSocket JSON | 三方通信契约 |
 
-- 全程 TLS（WSS/HTTPS）；密码 pbkdf2 加盐哈希；JWT 30 天
-- `RELAY_JWT_SECRET` 必须自定义，勿用默认值
-- 伴侣可配 `permission`（如 `{"bash":"ask"}`），关键操作必须手机审批
-- v2.1 规划：端到端加密、设备吊销、推送通知
+## 🔐 安全设计
+
+- **设备级配对**：电脑生成 6 位配对码，手机输入后绑定——同一账号下设备互不可见
+- **账号隔离**：所有数据按 user_id 隔离
+- **限流**：注册/登录/配对均有频率限制
+- **传输**：全程 TLS（HTTPS/WSS）
+
+## 🧱 技术栈
+
+- 中继：Python 3.12 · FastAPI · WebSocket · SQLite
+- 桌面端：Rust · Tauri 2 · tokio · reqwest
+- 手机端：Flutter 3 · http · web_socket_channel
+- 部署：Docker Compose · nginx · Caddy
+
+## 📂 目录结构
+
+```
+agentpilot/
+├── relay/       # 云端中继服务器（含 Docker 部署）
+├── desktop/     # 桌面端应用（Tauri）
+├── mobile/      # 手机端应用（Flutter）
+├── docs/        # 架构设计文档
+├── PROTOCOL.md  # 三方通信协议
+└── v1-expo/     # 早期原型（归档）
+```
+
+## 🤝 致谢
+
+- [opencode](https://github.com/anomalyco/opencode) —— 内置 Agent 引擎（进程级嵌入，未改动其源码）
+
+## 📄 License
+
+MIT License，详见 [LICENSE](LICENSE)。
