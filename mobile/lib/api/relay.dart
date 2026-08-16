@@ -161,20 +161,31 @@ class RelayApp {
   }
 
   Future<void> _openWs() async {
+    // 先取消旧订阅，避免旧连接的断开回调污染新连接状态
+    final oldSub = _sub;
+    _sub = null;
+    await oldSub?.cancel();
     final uri = Uri.parse('$_wsBase/ws/phone?token=${Uri.encodeQueryComponent(token)}');
     final ws = WebSocketChannel.connect(uri);
     _ws = ws;
     _sub = ws.stream.listen(
       _onMessage,
-      onError: (_) => _onDisconnected(),
-      onDone: _onDisconnected,
+      onError: (_) => _onWsClosed(ws),
+      onDone: () => _onWsClosed(ws),
       cancelOnError: true,
     );
     wsAlive.value = true;
+    if (!reconnected.isClosed) reconnected.add(null);
     _pingTimer?.cancel();
     _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) {
       _safeSend({'type': 'ping'});
     });
+  }
+
+  /// 仅当前连接可以更新状态；旧连接的断开事件一律忽略
+  void _onWsClosed(WebSocketChannel ws) {
+    if (!identical(_ws, ws)) return;
+    _onDisconnected();
   }
 
   void _onMessage(dynamic raw) {
