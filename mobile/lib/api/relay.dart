@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -34,6 +35,7 @@ class RelayApp {
   final Map<String, Completer<CmdResult>> _pending = {};
   final StreamController<Map<String, dynamic>> _events =
       StreamController.broadcast();
+  final ValueNotifier<bool> wsAlive = ValueNotifier(false);
   final List<Device> _devices = [];
 
   RelayApp({required this.relayUrl, required this.token, required this.email}) {
@@ -136,6 +138,7 @@ class RelayApp {
       onDone: _onDisconnected,
       cancelOnError: true,
     );
+    wsAlive.value = true;
     _pingTimer?.cancel();
     _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) {
       _safeSend({'type': 'ping'});
@@ -191,6 +194,7 @@ class RelayApp {
 
   void _onDisconnected() {
     _ws = null;
+    wsAlive.value = false;
     _pingTimer?.cancel();
     _pending.forEach(
         (_, c) => c.complete(const CmdResult(id: '', ok: false, error: '连接断开')));

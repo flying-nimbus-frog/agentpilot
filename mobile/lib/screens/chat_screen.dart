@@ -174,18 +174,26 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty || _state == '运行中') return;
+    if (!widget.app.wsAlive.value) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('连接已断开，正在重连，请稍后再发')));
+      }
+      return;
+    }
     setState(() {
       _input.clear();
       _state = '运行中';
     });
-    final r = await widget.app.cmd(
-        _did, 'POST', '/session/$_sid/prompt_async',
+    final r = await widget.app.cmd(_did, 'POST', '/session/$_sid/prompt_async',
         {'parts': [{'type': 'text', 'text': text}]});
     if (!r.ok && mounted) {
       setState(() {
         _state = '空闲';
         _error = r.error;
       });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('发送失败: ${r.error}')));
     }
   }
 
@@ -225,6 +233,17 @@ class _ChatScreenState extends State<ChatScreen> {
                   decoration: BoxDecoration(color: stateColor, shape: BoxShape.circle)),
               const SizedBox(width: 4),
               Text(_state, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            const SizedBox(width: 6),
+            ValueListenableBuilder<bool>(
+              valueListenable: widget.app.wsAlive,
+              builder: (_, alive, __) => Text(
+                alive ? '●' : '○ 连接断开',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: alive ? Colors.green : Colors.red,
+                ),
+              ),
+            ),
             ]),
           ],
         ),
