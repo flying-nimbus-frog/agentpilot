@@ -105,9 +105,6 @@ class MessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 用户消息空时不留占位；助手消息流式中显示 …
-            if (textParts.isEmpty && !isUser)
-              const Text('…', style: TextStyle(color: Colors.grey)),
             if (textParts.isNotEmpty)
               isUser
                   ? Text(

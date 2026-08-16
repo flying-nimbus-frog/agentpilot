@@ -434,15 +434,37 @@ class _ChatScreenState extends State<ChatScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    controller: _scroll,
-                    reverse: true, // 底部锚定：新消息/键盘弹出都不遮挡最新内容
-                    padding: const EdgeInsets.all(14),
-                    itemCount: _messages.length,
-                    itemBuilder: (_, i) => MessageBubble(
-                        role: _messages[_messages.length - 1 - i].role,
-                        parts: _messages[_messages.length - 1 - i].parts),
-                  ),
+                : Builder(builder: (ctx) {
+                    final anyText = _messages.any((m) =>
+                        m.parts
+                            .any((p) =>
+                                p.type == 'text' && (p.text ?? '').isNotEmpty));
+                    final showTyping = _state == '运行中' && !anyText;
+                    return ListView.builder(
+                      controller: _scroll,
+                      reverse: true, // 底部锚定：新消息/键盘弹出都不遮挡最新内容
+                      padding: const EdgeInsets.all(14),
+                      itemCount: _messages.length + (showTyping ? 1 : 0),
+                      itemBuilder: (_, i) {
+                        if (showTyping && i == 0) {
+                          // 单一"正在思考"指示（运行中且尚无正文时）
+                          return const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 6),
+                              child: Text('正在思考…',
+                                  style: TextStyle(
+                                      fontSize: 14, color: Color(0xFF8C959F))),
+                            ),
+                          );
+                        }
+                        final idx = _messages.length - 1 - i + (showTyping ? 1 : 0);
+                        return MessageBubble(
+                            role: _messages[idx].role,
+                            parts: _messages[idx].parts);
+                      },
+                    );
+                  }),
           ),
           SafeArea(
             top: false,
