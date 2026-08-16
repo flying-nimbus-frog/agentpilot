@@ -1,88 +1,88 @@
-# AgentPilot · 手机遥控电脑上的 AI Agent
+# AgentPilot · Control Your AI Agents from Your Phone
 
-> 在手机上指挥电脑上的 AI Agent 干活。账号体系 + 云端中继：装好桌面端和手机端，登录同一个账号，手机就能看到你的电脑、下发任务、审批权限、实时查看进度——任何网络环境可用，不限局域网。
+> Control the AI coding agents on your computer from your phone. Account system + cloud relay: install the desktop app and the mobile app, log in with the same account, and your phone can see your computers, dispatch tasks, approve permissions, and watch progress in real time — from anywhere, not just your LAN.
 
-## ✨ 特性
+## ✨ Features
 
-- 📱 **手机端（Flutter）**：登录 → 设备列表 → 会话 → 实时聊天，指令从手机直达电脑
-- 🖥️ **桌面端（Tauri）**：账号/设备配对管理、Agent 引擎管理、**全量运行日志**
-- 🤖 **多 Agent 引擎**：内置 MiniAgent（直连模型）/ 嵌入 opencode（完整工具能力），驱动层可扩展
-- 🔐 **安全**：设备级配对（6 位配对码）、账号隔离、TLS 全链路、登录限流
-- 🧠 **思考过程可见**：模型推理内容折叠展示，工具执行详情按需展开
-- 🌐 **任何网络**：手机 4G/5G/WiFi 都能连，不需要同一局域网
+- 📱 **Mobile app (Flutter)**: Login → device list → sessions → real-time chat; commands go straight from your phone to your computer
+- 🖥️ **Desktop app (Tauri)**: Account & device pairing management, agent engine management, **full runtime logs**
+- 🤖 **Multiple agent engines**: Built-in MiniAgent (direct LLM) / embedded opencode (full tool capabilities), extensible driver layer
+- 🔐 **Security**: Device-level pairing (6-digit code), per-account isolation, TLS end-to-end, rate limiting
+- 🧠 **Visible thinking process**: Model reasoning is shown collapsed; tool execution details expand on demand
+- 🌐 **Any network**: Works over 4G/5G/WiFi — no LAN requirement
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 方式一：使用托管中继（无需部署，推荐）
+### Option 1: Use the hosted relay (no deployment, recommended)
 
-项目提供官方中继服务，你只需要**客户端**：
+The project provides an official relay service — you only need the **clients**:
 
 ```
-1. 电脑：安装桌面端应用 → 注册账号 → 登录
-2. 电脑：Agent 页选择引擎（opencode / MiniAgent）→ 启动
-3. 电脑：设备页「注册本机为设备」→ 记下 6 位配对码
-4. 手机：安装 App → 登录同一账号 → 找到待配对设备 → 输入配对码
-5. 完成：手机下发指令，电脑执行，权限在手机上审批
+1. Computer: Install the desktop app → create an account → log in
+2. Computer: Agent tab → pick an engine (opencode / MiniAgent) → start
+3. Computer: Device tab → "Register this machine as a device" → note the 6-digit pairing code
+4. Phone: Install the app → log in with the same account → tap the pending device → enter the pairing code
+5. Done: Dispatch tasks from your phone; permissions are approved on your phone
 ```
 
-> 会话、代码、Agent 数据全部在你的电脑本地，中继只做路由转发，不存储你的业务内容。
+> Sessions, code, and agent data all stay on your computer locally. The relay only routes messages — it never stores your business content.
 
-### 方式二：自托管中继（Docker 一条命令）
+### Option 2: Self-host the relay (Docker, one command)
 
 ```bash
-git clone https://github.com/你的用户名/agentpilot.git && cd agentpilot/relay \
+git clone https://github.com/flying-nimbus-frog/agentpilot.git && cd agentpilot/relay \
   && echo "RELAY_JWT_SECRET=$(openssl rand -hex 32)" > .env \
   && docker compose up -d --build
 ```
 
-详见 `relay/README.md`（含 nginx 反代、HTTPS、systemd 部署）。
+See `relay/README.md` for nginx reverse proxy, HTTPS, and systemd deployment.
 
-## 🏗️ 架构
+## 🏗️ Architecture
 
 ```
-手机App ──HTTPS/WSS──▶ 云端中继 relay ◀──WSS── 桌面端（Agent 引擎）
-  Flutter              Python/FastAPI        Tauri + opencode/MiniAgent
-                          │
-                  账号体系 · 设备配对 · 指令路由 · 事件广播 · 状态心跳
+Mobile app ──HTTPS/WSS──▶ Cloud relay ◀──WSS── Desktop app (agent engine)
+  Flutter                 Python/FastAPI        Tauri + opencode/MiniAgent
+                              │
+              Accounts · device pairing · command routing · event broadcast · heartbeats
 ```
 
-| 组件 | 目录 | 技术 | 职责 |
-|------|------|------|------|
-| 中继 | `relay/` | Python + FastAPI + WebSocket | 账号、设备配对、路由、状态 |
-| 桌面端 | `desktop/` | Tauri (Rust + Web) | 设备管理、Agent 引擎、日志 |
-| 手机端 | `mobile/` | Flutter | 遥控界面、审批 |
-| 协议 | `PROTOCOL.md` | WebSocket JSON | 三方通信契约 |
+| Component | Directory | Tech | Responsibility |
+|-----------|-----------|------|----------------|
+| Relay | `relay/` | Python + FastAPI + WebSocket | Accounts, device pairing, routing, presence |
+| Desktop | `desktop/` | Tauri (Rust + Web) | Device management, agent engine, logs |
+| Mobile | `mobile/` | Flutter | Remote control UI, approvals |
+| Protocol | `PROTOCOL.md` | WebSocket JSON | Contract between the three parties |
 
-## 🔐 安全设计
+## 🔐 Security Design
 
-- **设备级配对**：电脑生成 6 位配对码，手机输入后绑定——同一账号下设备互不可见
-- **账号隔离**：所有数据按 user_id 隔离
-- **限流**：注册/登录/配对均有频率限制
-- **传输**：全程 TLS（HTTPS/WSS）
+- **Device-level pairing**: The computer generates a 6-digit code; the phone enters it to bind — devices on the same account can't see each other
+- **Account isolation**: All data is isolated by `user_id`
+- **Rate limiting**: Register / login / pairing all rate-limited
+- **Transport**: TLS everywhere (HTTPS/WSS)
 
-## 🧱 技术栈
+## 🧱 Tech Stack
 
-- 中继：Python 3.12 · FastAPI · WebSocket · SQLite
-- 桌面端：Rust · Tauri 2 · tokio · reqwest
-- 手机端：Flutter 3 · http · web_socket_channel
-- 部署：Docker Compose · nginx · Caddy
+- Relay: Python 3.12 · FastAPI · WebSocket · SQLite
+- Desktop: Rust · Tauri 2 · tokio · reqwest
+- Mobile: Flutter 3 · http · web_socket_channel
+- Deployment: Docker Compose · nginx · Caddy
 
-## 📂 目录结构
+## 📂 Repository Layout
 
 ```
 agentpilot/
-├── relay/       # 云端中继服务器（含 Docker 部署）
-├── desktop/     # 桌面端应用（Tauri）
-├── mobile/      # 手机端应用（Flutter）
-├── docs/        # 架构设计文档
-├── PROTOCOL.md  # 三方通信协议
-└── v1-expo/     # 早期原型（归档）
+├── relay/       # Cloud relay server (incl. Docker deployment)
+├── desktop/     # Desktop app (Tauri)
+├── mobile/      # Mobile app (Flutter)
+├── docs/        # Architecture design docs
+├── PROTOCOL.md  # Communication protocol
+└── v1-expo/     # Early prototype (archived)
 ```
 
-## 🤝 致谢
+## 🤝 Acknowledgements
 
-- [opencode](https://github.com/anomalyco/opencode) —— 内置 Agent 引擎（进程级嵌入，未改动其源码）
+- [opencode](https://github.com/anomalyco/opencode) — embedded agent engine (process-level embedding; its source is untouched)
 
 ## 📄 License
 
-MIT License，详见 [LICENSE](LICENSE)。
+MIT License — see [LICENSE](LICENSE).
