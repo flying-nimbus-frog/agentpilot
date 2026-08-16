@@ -20,7 +20,7 @@ RELAY_PORT=8080 .venv/bin/python main.py
 
 ```bash
 # 首次（含克隆代码 + 生成密钥 + 拉起，依赖走国内镜像）
-git clone https://gitee.com/sep20210917/opencode-phone-prototype.git && cd opencode-phone-prototype/relay && echo "RELAY_JWT_SECRET=$(openssl rand -hex 32)" > .env && docker compose up -d --build
+git clone https://github.com/你的用户名/agentpilot.git && cd agentpilot/relay && echo "RELAY_JWT_SECRET=$(openssl rand -hex 32)" > .env && docker compose up -d --build
 
 # 之后重启/更新
 docker compose up -d --build

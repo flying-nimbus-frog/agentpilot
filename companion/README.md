@@ -52,12 +52,12 @@ python3 -m venv .venv
   <key>Label</key><string>com.opencode-remote.companion</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/你的用户名/PycharmProjects/opencode-phone-prototype/companion/.venv/bin/python</string>
+    <string>/Users/你的用户名/PycharmProjects/agentpilot/companion/.venv/bin/python</string>
     <string>main.py</string>
     <string>run</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/你的用户名/PycharmProjects/opencode-phone-prototype/companion</string>
+  <string>/Users/你的用户名/PycharmProjects/agentpilot/companion</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>/tmp/oc-companion.log</string>

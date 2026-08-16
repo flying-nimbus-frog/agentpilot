@@ -223,7 +223,7 @@ SSE 以默认 `message` 事件名推送 `data: {id, type, properties}` JSON。�
 ## 10. 目录结构
 
 ```
-opencode-phone-prototype/
+agentpilot/
 ├── DESIGN.md                 # 本文档
 ├── companion/
 │   └── start-server.sh       # 电脑侧伴侣服务脚本

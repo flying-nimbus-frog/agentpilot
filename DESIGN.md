@@ -158,7 +158,7 @@ v1 的两大痛点：
 ## 6. 项目结构
 
 ```
-opencode-phone-prototype/
+agentpilot/
 ├── DESIGN.md              # 本文档
 ├── PROTOCOL.md            # 通信协议详细契约（手机端实现者必读）
 ├── v1-expo/               # v1 归档（废弃）
