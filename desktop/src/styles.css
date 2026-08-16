@@ -56,7 +56,7 @@ nav {
 }
 .tab.active { color: var(--blue); font-weight: 700; border-bottom-color: var(--blue); }
 
-.pane { display: none; padding: 16px 20px; max-width: 720px; }
+.pane { display: none; padding: 16px 24px; max-width: 1080px; margin: 0 auto; width: 100%; box-sizing: border-box; }
 .pane.active { display: block; }
 
 .card {
@@ -215,3 +215,4 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   word-break: break-all;
   font-size: 12.5px;
 }
+.act-chips { margin-bottom: 6px; }

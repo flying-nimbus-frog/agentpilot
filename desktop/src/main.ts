@@ -51,7 +51,6 @@ function refreshStatus() {
 interface APart { id: string; type: string; text: string; tool?: string; state?: string; }
 interface AMsg { id: string; role: string; parts: APart[]; }
 let msgs: AMsg[] = [];
-let overlay: { kind: "reasoning" | "tools"; parts: APart[] } | null = null;
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -103,60 +102,64 @@ function onAgentEvent(ev: any) {
 function renderActivity() {
   const view = $("activity-view");
   if (msgs.length === 0) { view.innerHTML = '<div class="dim">等待任务…</div>'; return; }
+  // 回合级合并：全部消息的思考/工具各汇总为一条（与手机端一致）
+  const allReason: APart[] = [];
+  const allTools: APart[] = [];
+  for (const m of msgs) {
+    allReason.push(...m.parts.filter((p) => p.type === "reasoning" && p.text));
+    allTools.push(...m.parts.filter((p) => p.type === "tool"));
+  }
   let html = "";
+  if (allReason.length)
+    html += '<span class="act-chip" id="chip-reason">💭 已思考</span> ';
+  if (allTools.length)
+    html += '<span class="act-chip" id="chip-tools">🛠 工具 ' + allTools.length + '</span>';
+  if (html) html = '<div class="act-chips">' + html + "</div>";
   for (const m of msgs) {
     const isUser = m.role === "user";
     const textParts = m.parts.filter((p) => p.type === "text" && p.text);
-    const reasonParts = m.parts.filter((p) => p.type === "reasoning");
-    const toolParts = m.parts.filter((p) => p.type === "tool");
     html += '<div class="act-row ' + (isUser ? "right" : "left") + '">';
     html += '<div class="act-bubble ' + (isUser ? "user" : "agent") + '">';
-    if (reasonParts.length)
-      html += '<span class="act-chip" data-kind="reasoning" data-msg="' + m.id + '">💭 思考中/已思考</span> ';
-    if (toolParts.length)
-      html += '<span class="act-chip" data-kind="tools" data-msg="' + m.id + '">🛠 工具 ' + toolParts.length + '</span> ';
     html += textParts.map((p) => '<div class="act-text">' + esc(p.text) + "</div>").join("");
-    if (!textParts.length && !reasonParts.length && !toolParts.length) html += '<div class="dim">…</div>';
+    if (!textParts.length) html += '<div class="dim">…</div>';
     html += "</div></div>";
   }
   view.innerHTML = html;
-  // 折叠条点击 → 悬浮详情
-  view.querySelectorAll(".act-chip").forEach((el) => {
-    (el as HTMLElement).onclick = (e) => {
-      e.stopPropagation();
-      const kind = (el as HTMLElement).dataset.kind as "reasoning" | "tools";
-      const msgId = (el as HTMLElement).dataset.msg as string;
-      const m = msgs.find((x) => x.id === msgId);
-      if (!m) return;
-      overlay = { kind, parts: m.parts.filter((p) => kind === "reasoning" ? p.type === "reasoning" : p.type === "tool") };
-      renderOverlay();
-    };
-  });
+  const r = document.getElementById("chip-reason");
+  const t = document.getElementById("chip-tools");
+  if (r) r.onclick = () => openOverlay("reasoning", allReason);
+  if (t) t.onclick = () => openOverlay("tools", allTools);
   view.scrollTop = view.scrollHeight;
 }
 
-function renderOverlay() {
+function openOverlay(kind: "reasoning" | "tools", parts: APart[]) {
   let ov = document.getElementById("act-overlay");
-  if (!overlay) { if (ov) ov.remove(); return; }
   if (!ov) {
     ov = document.createElement("div");
     ov.id = "act-overlay";
     document.body.appendChild(ov);
-    ov.onclick = () => { overlay = null; renderOverlay(); };
+    ov.addEventListener("click", closeOverlay);
   }
-  const kind = overlay.kind;
-  const inner = overlay.parts.map((p) => {
+  const inner = parts.map((p) => {
     if (kind === "reasoning") return '<div class="ov-block">' + esc(p.text) + "</div>";
-    const st = p.state || "";
-    let body = esc(p.tool || "tool") + " (" + st + ")";
-    if (p.text) body += "<br/>" + esc(p.text);
+    let body = esc(p.tool || "tool") + " (" + esc(p.state || "") + ")";
+    const inp = p.text;
+    if (inp) body += "<br/>" + esc(inp);
     return '<div class="ov-block">' + body + "</div>";
   }).join("");
   ov.innerHTML =
-    '<div class="ov-panel" onclick="event.stopPropagation()">' +
+    '<div class="ov-panel" id="ov-panel">' +
     '<div class="ov-head">' + (kind === "reasoning" ? "💭 思考过程" : "🛠 工具执行") +
-    ' <button onclick="document.getElementById(\'act-overlay\').remove(); overlay=null; return false;">✕</button></div>' +
+    ' <button id="ov-close">✕</button></div>' +
     '<div class="ov-body">' + inner + "</div></div>";
+  const panel = document.getElementById("ov-panel")!;
+  panel.addEventListener("click", (e) => e.stopPropagation());
+  document.getElementById("ov-close")!.addEventListener("click", closeOverlay);
+}
+
+function closeOverlay() {
+  const ov = document.getElementById("act-overlay");
+  if (ov) ov.remove();
 }
 
 listen("agent-event", (e) => onAgentEvent(e.payload));
