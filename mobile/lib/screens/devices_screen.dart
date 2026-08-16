@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api/protocol.dart';
 import '../api/relay.dart';
@@ -22,7 +23,13 @@ class _DevicesScreenState extends State<DevicesScreen> {
   @override
   void initState() {
     super.initState();
-    widget.app.events.listen((_) {
+    widget.app.events.listen((ev) {
+      // 审批/补充信息请求到达：震动 + 提示音（全局，任何页面都生效）
+      final t = ev['type'];
+      if (t == 'permission.asked' || t == 'permission.ask') {
+        HapticFeedback.mediumImpact();
+        SystemSound.play(SystemSoundType.alert);
+      }
       if (mounted) setState(() {});
     });
     _connect();
