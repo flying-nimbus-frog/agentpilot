@@ -7,6 +7,7 @@ import time
 
 import db
 import mailer
+import pages
 from auth import (
     create_one_time_token,
     create_token,
@@ -17,7 +18,7 @@ from auth import (
 )
 from fastapi import FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from hub import hub
 from pydantic import BaseModel
 from ratelimit import RateLimiter
@@ -161,14 +162,33 @@ def _require_user(authorization: str | None) -> dict:
     return user
 
 
-@app.get("/api/verify")
+@app.get("/api/verify", response_class=HTMLResponse)
 def api_verify(token: str, request: Request = None):
     """邮箱验证（邮件里的链接）。"""
     user_id = verify_one_time_token(token, "verify")
     if not user_id:
+        if request and "text/html" in request.headers.get("accept", ""):
+            return pages.verify_failed()
         raise HTTPException(400, "Verification link is invalid or has expired")
     db.mark_email_verified(user_id)
+    if request and "text/html" in request.headers.get("accept", ""):
+        return pages.verify_success()
     return {"ok": True, "message": "Email verified successfully"}
+
+
+@app.post("/api/resend-verification")
+def api_resend_verification(authorization: str | None = Header(None)):
+    """重新发送邮箱验证邮件。"""
+    user = _require_user(authorization)
+    if user["email_verified"]:
+        return {"ok": True, "message": "Email already verified"}
+    vt = create_one_time_token(user["id"], "verify", 24 * 3600)
+    mailer.send_mail(
+        user["email"],
+        "AgentPilot email verification",
+        f"Welcome to AgentPilot! Click the link below to verify your email (valid for 24 hours):\n\n{mailer.build_verify_url(vt)}",
+    )
+    return {"ok": True, "message": "Verification email sent", "verificationSent": mailer.enabled()}
 
 
 @app.post("/api/forgot-password")
@@ -182,9 +202,18 @@ def api_forgot_password(body: ForgotIn, request: Request):
         mailer.send_mail(
             email,
             "AgentPilot password reset",
-            f"请点击以下链接重置密码（1 小时内有效）：\n\n{mailer.build_reset_url(rt)}",
+            f"Click the link below to reset your password (valid for 1 hour):\n\n{mailer.build_reset_url(rt)}",
         )
     return {"ok": True, "message": "If the email is registered, a reset link has been sent"}
+
+
+@app.get("/api/reset-password", response_class=HTMLResponse)
+def api_reset_password_page(token: str, request: Request = None):
+    """邮件链接：渲染移动友好的重置密码表单。"""
+    user_id = verify_one_time_token(token, "reset")
+    if not user_id:
+        return pages.reset_invalid()
+    return pages.reset_form(token)
 
 
 @app.post("/api/reset-password")
