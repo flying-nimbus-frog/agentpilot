@@ -25,7 +25,7 @@ from ratelimit import RateLimiter
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("relay")
 
-app = FastAPI(title="OpenCode Remote Relay", version="2.1.0")
+app = FastAPI(title="AgentPilot Relay", version="2.1.0")
 
 # 开发/Web 调试用 CORS（RELAY_CORS=1 开启；手机原生 App 不受 CORS 限制）
 if os.environ.get("RELAY_CORS") == "1":
@@ -90,9 +90,9 @@ def _client_ip(request: Request) -> str:
 def _check_ratelimit(request: Request, limiter: RateLimiter, what: str):
     ip = _client_ip(request)
     if not rl_global.allow(ip):
-        raise HTTPException(429, "请求过于频繁，请稍后再试")
+        raise HTTPException(429, "Too many requests, please try again later")
     if not limiter.allow(ip):
-        raise HTTPException(429, f"{what}过于频繁，请稍后再试")
+        raise HTTPException(429, f"{what} attempts too frequently, please try again later")
 
 
 @app.get("/health")
@@ -102,19 +102,19 @@ def health():
 
 @app.post("/api/register")
 def register(body: RegisterIn, request: Request):
-    _check_ratelimit(request, rl_register, "注册")
+    _check_ratelimit(request, rl_register, "Registration")
     email = body.email.strip().lower()
     if not email or len(body.password) < 6:
-        raise HTTPException(400, "邮箱或密码不合法（密码至少 6 位）")
+        raise HTTPException(400, "Invalid email or password (password must be at least 6 characters)")
     pwd_hash, salt = hash_password(body.password)
     user = db.create_user(email, pwd_hash, salt)
     if user is None:
-        raise HTTPException(409, "邮箱已注册")
+        raise HTTPException(409, "Email already registered")
     # 发送邮箱验证邮件（未配置 SMTP 时链接打印到日志）
     vt = create_one_time_token(user["id"], "verify", 24 * 3600)
     mailer.send_mail(
         email,
-        "AgentPilot 邮箱验证",
+        "AgentPilot email verification",
         f"欢迎注册 AgentPilot！请点击以下链接完成邮箱验证（24 小时内有效）：\n\n{mailer.build_verify_url(vt)}",
     )
     ver = 0
@@ -127,11 +127,11 @@ def register(body: RegisterIn, request: Request):
 
 @app.post("/api/login")
 def login(body: LoginIn, request: Request):
-    _check_ratelimit(request, rl_login, "登录")
+    _check_ratelimit(request, rl_login, "Login")
     email = body.email.strip().lower()
     user = db.get_user_by_email(email)
     if not user or not verify_password(body.password, user["salt"], user["password_hash"]):
-        raise HTTPException(401, "邮箱或密码错误")
+        raise HTTPException(401, "Incorrect email or password")
     rl_login.reset(_client_ip(request))
     return {
         "token": create_token(user["id"], user["session_version"]),
@@ -145,19 +145,19 @@ def login(body: LoginIn, request: Request):
 
 def _require_user(authorization: str | None) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(401, "未登录")
+        raise HTTPException(401, "Not logged in")
     payload = decode_token(authorization[7:])
     if not payload or payload.get("purpose", "auth") != "auth":
-        raise HTTPException(401, "登录已过期")
+        raise HTTPException(401, "Session expired")
     user_id = payload.get("sub")
     if not user_id:
-        raise HTTPException(401, "登录已过期")
+        raise HTTPException(401, "Session expired")
     user = db.get_user(user_id)
     if not user:
-        raise HTTPException(401, "用户不存在")
+        raise HTTPException(401, "User not found")
     # 会话吊销检查：token 中的版本必须等于当前版本
     if payload.get("ver", 0) != user["session_version"]:
-        raise HTTPException(401, "登录已失效，请重新登录")
+        raise HTTPException(401, "Session revoked, please log in again")
     return user
 
 
@@ -166,36 +166,36 @@ def api_verify(token: str, request: Request = None):
     """邮箱验证（邮件里的链接）。"""
     user_id = verify_one_time_token(token, "verify")
     if not user_id:
-        raise HTTPException(400, "验证链接无效或已过期")
+        raise HTTPException(400, "Verification link is invalid or has expired")
     db.mark_email_verified(user_id)
-    return {"ok": True, "message": "邮箱验证成功"}
+    return {"ok": True, "message": "Email verified successfully"}
 
 
 @app.post("/api/forgot-password")
 def api_forgot_password(body: ForgotIn, request: Request):
     """发送密码重置邮件（无论邮箱是否存在都返回成功，防枚举）。"""
-    _check_ratelimit(request, rl_register, "找回密码")
+    _check_ratelimit(request, rl_register, "Password recovery")
     email = body.email.strip().lower()
     user = db.get_user_by_email(email)
     if user:
         rt = create_one_time_token(user["id"], "reset", 3600)
         mailer.send_mail(
             email,
-            "AgentPilot 密码重置",
+            "AgentPilot password reset",
             f"请点击以下链接重置密码（1 小时内有效）：\n\n{mailer.build_reset_url(rt)}",
         )
-    return {"ok": True, "message": "如果该邮箱已注册，重置链接已发送"}
+    return {"ok": True, "message": "If the email is registered, a reset link has been sent"}
 
 
 @app.post("/api/reset-password")
 def api_reset_password(body: ResetIn, request: Request):
     """用邮件里的令牌重置密码。"""
-    _check_ratelimit(request, rl_register, "重置密码")
+    _check_ratelimit(request, rl_register, "Password reset")
     user_id = verify_one_time_token(body.token, "reset")
     if not user_id:
-        raise HTTPException(400, "重置链接无效或已过期")
+        raise HTTPException(400, "Reset link is invalid or has expired")
     if len(body.password) < 6:
-        raise HTTPException(400, "密码至少 6 位")
+        raise HTTPException(400, "Password must be at least 6 characters")
     pwd_hash, salt = hash_password(body.password)
     with db._conn() as conn:
         conn.execute(
@@ -203,7 +203,7 @@ def api_reset_password(body: ResetIn, request: Request):
             (pwd_hash, salt, user_id),
         )
     db.bump_session_version(user_id)  # 重置后所有旧登录失效
-    return {"ok": True, "message": "密码已重置，请重新登录"}
+    return {"ok": True, "message": "Password has been reset, please log in again"}
 
 
 @app.post("/api/sessions/revoke")
@@ -211,7 +211,7 @@ def api_sessions_revoke(authorization: str | None = Header(None)):
     """登出所有设备：所有已签发的 JWT 立即失效。"""
     user = _require_user(authorization)
     db.bump_session_version(user["id"])
-    return {"ok": True, "message": "所有登录已失效"}
+    return {"ok": True, "message": "All sessions have been revoked"}
 
 
 @app.get("/api/devices")
@@ -239,12 +239,12 @@ def api_devices_status(device_id: str, token: str):
     """电脑端轮询配对状态（用 pendingToken）。激活后返回正式 deviceToken。"""
     dev = db.get_pending_device_by_token(token)
     if not dev or dev["id"] != device_id:
-        raise HTTPException(404, "配对请求不存在")
+        raise HTTPException(404, "Pairing request not found")
     now = int(time.time() * 1000)
     if dev["status"] == "pending":
         if now > dev["pairing_expires"]:
             db.delete_device(dev["user_id"], device_id)
-            raise HTTPException(410, "配对码已过期，请电脑端重新登录注册")
+            raise HTTPException(410, "Pairing code expired, please re-register on the computer")
         return {"status": "pending"}
     # 已激活：返回正式令牌（pendingToken 校验通过后返回一次）
     return {"status": "active", "deviceToken": dev["token"]}
@@ -255,7 +255,7 @@ def api_devices_pair_by_code(
     body: PairIn, authorization: str | None = Header(None), request: Request = None
 ):
     """手机端确认配对（按配对码匹配，无需指定设备ID）。"""
-    _check_ratelimit(request, rl_pair, "配对")
+    _check_ratelimit(request, rl_pair, "Pairing")
     user = _require_user(authorization)
     code = body.code.strip()
     devs = db.list_pending_devices(user["id"])
@@ -264,13 +264,13 @@ def api_devices_pair_by_code(
         if dev["pairing_code"] == code:
             if now > dev["pairing_expires"]:
                 db.delete_device(user["id"], dev["id"])
-                raise HTTPException(410, "配对码已过期，请电脑端重新注册")
+                raise HTTPException(410, "Pairing code expired, please re-register on the computer")
             result = db.activate_pending_device(dev["id"], user["id"])
             if not result:
-                raise HTTPException(409, "设备状态异常")
+                raise HTTPException(409, "Device state error")
             log.info("device paired by code: %s (%s)", dev["id"], dev["name"])
             return result
-    raise HTTPException(401, "配对码错误")
+    raise HTTPException(401, "Incorrect pairing code")
 
 
 @app.post("/api/devices/{device_id}/pair")
@@ -279,20 +279,20 @@ def api_devices_pair(
     request: Request = None,
 ):
     """手机端确认配对：输入桌面端显示的 6 位配对码。"""
-    _check_ratelimit(request, rl_pair, "配对")
+    _check_ratelimit(request, rl_pair, "Pairing")
     user = _require_user(authorization)
     dev = db.get_pending_device(device_id, user["id"])
     if not dev:
-        raise HTTPException(404, "待配对设备不存在")
+        raise HTTPException(404, "Pending device not found")
     now = int(time.time() * 1000)
     if now > dev["pairing_expires"]:
         db.delete_device(user["id"], device_id)
-        raise HTTPException(410, "配对码已过期，请电脑端重新注册")
+        raise HTTPException(410, "Pairing code expired, please re-register on the computer")
     if body.code != dev["pairing_code"]:
-        raise HTTPException(401, "配对码错误")
+        raise HTTPException(401, "Incorrect pairing code")
     result = db.activate_pending_device(device_id, user["id"])
     if not result:
-        raise HTTPException(409, "设备状态异常")
+        raise HTTPException(409, "Device state error")
     log.info("device paired: %s (%s)", device_id, dev["name"])
     return result
 
@@ -301,9 +301,9 @@ def api_devices_pair(
 async def api_devices_delete(device_id: str, authorization: str | None = Header(None)):
     user = _require_user(authorization)
     if hub.is_device_online(device_id):
-        raise HTTPException(400, "设备在线，请先断开")
+        raise HTTPException(400, "Device is online, please disconnect it first")
     if not db.delete_device(user["id"], device_id):
-        raise HTTPException(404, "设备不存在")
+        raise HTTPException(404, "Device not found")
     return {"ok": True}
 
 
@@ -355,14 +355,14 @@ async def ws_phone(ws: WebSocket):
                 if not hub.is_device_online(device_id):
                     await _send(
                         ws,
-                        {"type": "cmd.result", "id": req_id, "ok": False, "error": "设备离线"},
+                        {"type": "cmd.result", "id": req_id, "ok": False, "error": "Device is offline"},
                     )
                     continue
                 fwd = {"type": "cmd", "id": req_id, "cmd": cmd}
                 if not await hub.send_to_device(device_id, fwd):
                     await _send(
                         ws,
-                        {"type": "cmd.result", "id": req_id, "ok": False, "error": "设备离线"},
+                        {"type": "cmd.result", "id": req_id, "ok": False, "error": "Device is offline"},
                     )
     except WebSocketDisconnect:
         pass
