@@ -195,6 +195,36 @@ class _DevicesScreenState extends State<DevicesScreen> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
               ),
+            // 套餐状态
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.app.plan == 'pro'
+                            ? 'Pro 版 · 设备额度无限'
+                            : '免费版 · 设备 ${widget.app.activeDevices}/${widget.app.deviceLimit}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    if (widget.app.plan != 'pro' &&
+                        widget.app.deviceLimit > 0 &&
+                        widget.app.activeDevices >= widget.app.deviceLimit)
+                      TextButton(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('升级入口即将上线，敬请期待')));
+                        },
+                        child: const Text('了解升级',
+                            style: TextStyle(color: Color(0xFF9A6700))),
+                      ),
+                  ],
+                ),
+              ),
+            ),
             if (_devices.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 80),

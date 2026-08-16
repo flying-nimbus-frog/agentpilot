@@ -24,6 +24,10 @@ class RelayApp {
   String token;
   String email;
   bool emailVerified = false;
+  String plan = 'free';
+  int planExpires = 0;
+  int deviceLimit = 1;
+  int activeDevices = 0;
 
   late String _httpBase;
   late String _wsBase;
@@ -107,6 +111,20 @@ class RelayApp {
   static Future<void> forgotPassword(String email) async {
     const relayUrl = defaultRelayUrl;
     await _post('$relayUrl/api/forgot-password', {'email': email});
+  }
+
+  /// 拉取当前套餐信息
+  Future<void> fetchPlan() async {
+    final res = await http
+        .get(Uri.parse('$_httpBase/api/plan'), headers: {
+      'Authorization': 'Bearer $token',
+    }).timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) return;
+    final d = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    plan = d['plan'] as String? ?? 'free';
+    planExpires = d['planExpires'] as int? ?? 0;
+    deviceLimit = d['deviceLimit'] as int? ?? 1;
+    activeDevices = d['activeDevices'] as int? ?? 0;
   }
 
   /// 重新发送邮箱验证邮件（需登录）
