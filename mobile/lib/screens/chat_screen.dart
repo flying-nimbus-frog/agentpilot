@@ -38,6 +38,8 @@ class _ChatScreenState extends State<ChatScreen> {
   // 回合级思考：一次对话 = 一条折叠思考条（无论 opencode 分几步思考）
   final Map<String, String> _turnReasoning = {}; // partId -> 累计文本
   bool _reasoningDone = false;
+  // 回合级工具执行：不进主内容区，折叠展示
+  final Map<String, Part> _turnTools = {}; // partId -> 最新工具状态
   Timer? _watchdog;
 
   String get _sid => widget.session.id;
@@ -106,6 +108,8 @@ class _ChatScreenState extends State<ChatScreen> {
             // 思考内容按 partId 累计，回合结束汇总为一条
             if (p.type == 'reasoning') {
               if (p.id != null) _turnReasoning[p.id!] = p.text ?? '';
+            } else if (p.type == 'tool') {
+              if (p.id != null) _turnTools[p.id!] = p;
             } else {
               _applyPart(p);
             }
@@ -222,6 +226,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _state = '运行中';
       _turnReasoning.clear();
       _reasoningDone = false;
+      _turnTools.clear();
     });
     final r = await widget.app.cmd(_did, 'POST', '/session/$_sid/prompt_async',
         {'parts': [{'type': 'text', 'text': text}]});
@@ -316,12 +321,19 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
           ),
           // 回合级思考条：一次对话一条（固定位置，不随消息滚动）
-          if (_turnReasoning.isNotEmpty)
+          if (_turnReasoning.isNotEmpty || _turnTools.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
-              child: ReasoningStrip(
-                text: _turnReasoning.values.join('\n'),
-                thinking: !_reasoningDone,
+              child: Column(
+                children: [
+                  if (_turnReasoning.isNotEmpty)
+                    ReasoningStrip(
+                      text: _turnReasoning.values.join('\n'),
+                      thinking: !_reasoningDone,
+                    ),
+                  if (_turnTools.isNotEmpty)
+                    ToolSummaryStrip(tools: _turnTools.values.toList()),
+                ],
               ),
             ),
           SafeArea(

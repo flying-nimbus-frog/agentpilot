@@ -88,8 +88,7 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = role == 'user';
-    // 思考内容不在消息内渲染（由聊天页按回合统一显示一条）
-    final toolParts = parts.where((p) => p.isTool).toList();
+    // 工具执行与思考均不进主内容区（由聊天页回合级折叠条展示）
     final textParts = parts
         .where((p) => p.type == 'text' && (p.text ?? '').isNotEmpty)
         .toList();
@@ -106,9 +105,8 @@ class MessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (toolParts.isEmpty && textParts.isEmpty)
+            if (textParts.isEmpty)
               const Text('…', style: TextStyle(color: Colors.grey)),
-            for (final p in toolParts) ToolCard(part: p),
             if (textParts.isNotEmpty)
               isUser
                   ? Text(
@@ -151,6 +149,68 @@ class MessageBubble extends StatelessWidget {
                       ),
                       selectable: true,
                     ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 工具执行摘要：回合级折叠条，默认只显示统计，展开看细节
+class ToolSummaryStrip extends StatefulWidget {
+  final List<Part> tools;
+  const ToolSummaryStrip({super.key, required this.tools});
+
+  @override
+  State<ToolSummaryStrip> createState() => _ToolSummaryStripState();
+}
+
+class _ToolSummaryStripState extends State<ToolSummaryStrip> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tools = widget.tools;
+    if (tools.isEmpty) return const SizedBox.shrink();
+    final counts = <String, int>{};
+    for (final t in tools) {
+      final name = t.tool ?? 'tool';
+      counts[name] = (counts[name] ?? 0) + 1;
+    }
+    final summary =
+        counts.entries.map((e) => '${e.key}×${e.value}').join(' · ');
+    return GestureDetector(
+      onTap: () => setState(() => _expanded = !_expanded),
+      child: Container(
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4F1E8),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE5DCC3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('🛠', style: TextStyle(fontSize: 12)),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    _expanded
+                        ? '收起工具详情'
+                        : '已执行工具：$summary（点击查看）',
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF8A6D1A)),
+                  ),
+                ),
+              ],
+            ),
+            if (_expanded)
+              for (final t in tools) ToolCard(part: t),
           ],
         ),
       ),
