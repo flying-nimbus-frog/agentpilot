@@ -6,6 +6,7 @@ import secrets
 import time
 
 import db
+import dotenv
 import mailer
 import pages
 from auth import (
@@ -36,6 +37,8 @@ if os.environ.get("RELAY_CORS") == "1":
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+dotenv.load_dotenv()
 
 HEARTBEAT_TIMEOUT = 90  # 秒，超过视为离线
 PAIRING_TTL_SEC = 600   # 配对码有效期
