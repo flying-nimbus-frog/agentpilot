@@ -287,7 +287,6 @@ async fn handle_relay_msg(
             let reply = tokio::spawn(async move {
                 let id = id_task;
                 let data: Result<Value, String> = if mode_v == MODE_OPENCODE {
-                    let body = inject_concise(&method_task, &path_task, body);
                     opencode_request(&opencode_c, &method_task, &path_task, body, forced_model.clone()).await
                 } else {
                     dispatch(mini_c, &method_task, &path_task, body, tx)
@@ -327,20 +326,7 @@ async fn handle_relay_msg(
     }
 }
 
-/// opencode 模式的手机端精简指令：注入 prompt_async 的 system 字段（不污染用户可见消息）。
-fn inject_concise(method: &str, path: &str, body: Option<Value>) -> Option<Value> {
-    if method != "POST" || !path.ends_with("/prompt_async") {
-        return body;
-    }
-    let mut body = body?;
-    const CONCISE: &str = "你是在手机上运行的助手，用户通过小屏手机阅读你的回复。请务必精简：\
-优先直接给结论，去除铺垫、客套和冗余说明。除非用户明确要求详细，否则控制在 3-5 句话以内；\
-需要代码时只给关键片段，不要逐行解释。不要复述用户的问题，不要总结你做了什么。";
-    if body.get("system").is_none() {
-        body["system"] = Value::String(CONCISE.to_string());
-    }
-    Some(body)
-}
+
 
 /// 指令分发：MiniAgent 实现 opencode 兼容指令面
 fn dispatch(    mini: Arc<MiniAgent>,
@@ -439,15 +425,21 @@ async fn opencode_request(
     if !oc.running() {
         return Err("opencode 未启动".into());
     }
-    // 强制指定模型：在 prompt 请求中注入 model 字段，避免使用 opencode 默认模型
+    // 强制指定模型：在 prompt 请求中注入 model 对象，避免使用 opencode 默认模型
+    // opencode 的 model 字段需要对象格式 {providerID, modelID}
     let mut body = body;
     if !forced_model.is_empty() && path.ends_with("/prompt_async") {
+        let (provider, model_id) = match forced_model.split_once('/') {
+            Some((p, m)) => (p.to_string(), m.to_string()),
+            None => ("deepseek".to_string(), forced_model.clone()),
+        };
+        let model_obj = json!({"providerID": provider, "modelID": model_id});
         if let Some(b) = body.as_mut() {
             if b.get("model").is_none() {
-                b["model"] = json!(forced_model);
+                b["model"] = model_obj;
             }
         } else {
-            body = Some(json!({"model": forced_model}));
+            body = Some(json!({"model": model_obj}));
         }
     }
     let r = oc.request(method, path, body).await?;
