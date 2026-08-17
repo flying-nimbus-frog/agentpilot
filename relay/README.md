@@ -151,3 +151,54 @@ RELAY_PUBLIC_BASE=https://relay.zhileai.net
 ```
 
 未配置 SMTP 时：验证/重置链接打印到容器日志（仅开发用）。国内可选阿里云邮件推送、SendGrid 等。
+
+## APNs 推送通知（审批/补充信息/任务完成提醒）
+
+### 前置：Apple 开发者后台申请凭据
+
+1. **Team ID**：developer.apple.com → 头像 → Membership Details
+2. **APNs Auth Key (.p8)**：Certificates, Identifiers & Profiles → Keys → 新建 Key →
+   勾选 **Apple Push Notifications service (APNs)** → Download（**只能下载一次，妥善保存**）
+3. **Key ID**：Keys 列表点该 Key 查看
+4. 确认 App ID（如 `net.zhileai.agentpilot`）的 **Push Notifications** 能力已开启
+
+### 配置（.env）
+
+```
+RELAY_APNS_KEY_PATH=/opt/opencode-phone-prototype/relay/AuthKey_XXXXXXXXXX.p8
+RELAY_APNS_KEY_ID=XXXXXXXXXX          # Key ID
+RELAY_APNS_TEAM_ID=XXXXXXXXXX         # Team ID
+RELAY_APNS_TOPIC=net.zhileai.agentpilot  # App Bundle ID
+RELAY_APNS_URL=https://api.push.apple.com
+```
+
+### ⚠️ 沙盒 / 生产环境切换（必读）
+
+| App 签名方式 | APNs 环境 | RELAY_APNS_URL |
+|-------------|----------|----------------|
+| 开发签名（Xcode 直装 / 个人免费账号） | **沙盒** | `https://api.sandbox.push.apple.com` |
+| TestFlight / App Store（生产签名） | **生产** | `https://api.push.apple.com`（默认） |
+
+**环境不匹配时 APNs 返回 `BadDeviceToken`，推送静默失败**——这是最常见的坑。
+
+### 触发时机（中继自动推送）
+
+| 事件 | 推送内容 | 前台表现 | 后台/锁屏 |
+|------|---------|---------|----------|
+| `permission.asked` | 需要你的授权 / 需要补充信息 | 应用内震动+弹窗 | 系统横幅 |
+| `session.idle` | 任务完成 | 静默 | 系统横幅 |
+
+### 验证
+
+```bash
+# 1. 确认服务端就绪
+curl -X POST https://你的域名/api/push/register -H "Authorization: Bearer <jwt>" -H "Content-Type: application/json" -d '{"token":"x"}'  # pushEnabled 应为 true
+
+# 2. 手机登录 → 授权通知 → App 自动注册 APNs token
+
+# 3. 触发一次授权请求（如 bash:ask），锁屏手机应收到横幅
+
+# 4. 服务器日志排查
+docker logs ocrelay --tail 60 2>&1 | grep apns
+#   推送成功: [apns] 推送成功
+#   BadDeviceToken: 环境不匹配或 token 过期
