@@ -49,7 +49,7 @@ function refreshStatus() {
 
 // ---------- 活动（与手机端一致的聊天视图） ----------
 interface APart { id: string; type: string; text: string; tool?: string; state?: string; }
-interface AMsg { id: string; role: string; parts: APart[]; }
+interface AMsg { id: string; role: string; sessionID: string; parts: APart[]; }
 let msgs: AMsg[] = [];
 
 function esc(s: string): string {
@@ -59,9 +59,12 @@ function partState(p: any): string {
   const st = p.state;
   return typeof st === "string" ? st : st?.status || "";
 }
-function upsertMsg(id: string, role: string) {
+function upsertMsg(id: string, role: string, sessionID: string) {
   let m = msgs.find((x) => x.id === id);
-  if (!m) { m = { id, role, parts: [] }; msgs.push(m); }
+  if (!m) {
+    m = { id, role, sessionID, parts: [] };
+    msgs.push(m);
+  }
   else if (m.role !== role) m.role = role;
   return m;
 }
@@ -76,14 +79,14 @@ function onAgentEvent(ev: any) {
     case "message.created":
     case "message.updated": {
       const info = props.info;
-      if (info && info.id) upsertMsg(info.id, info.role || "assistant");
+      if (info && info.id) upsertMsg(info.id, info.role || "assistant", props.sessionID || "");
       break;
     }
     case "message.part.updated": {
       const p = props.part || {};
       const mid = p.messageID;
       if (!mid) break;
-      const m = upsertMsg(mid, "assistant");
+      const m = upsertMsg(mid, "assistant", props.sessionID || "");
       upsertPart(m, {
         id: p.id || Math.random().toString(36).slice(2),
         type: p.type || "text",
@@ -115,11 +118,19 @@ function renderActivity() {
   if (allTools.length)
     html += '<span class="act-chip" id="chip-tools">🛠 工具 ' + allTools.length + '</span>';
   if (html) html = '<div class="act-chips">' + html + "</div>";
+  // 只显示最近一个会话（新会话开始时自动切换，不再混流）
+  const active = msgs.length ? msgs[msgs.length - 1].sessionID : "";
+  let lastShown = "";
   for (const m of msgs) {
+    if (m.sessionID !== active) continue;
     const isUser = m.role === "user";
     const textParts = m.parts.filter((p) => p.type === "text" && p.text);
     // 只渲染含正文的消息；纯工具/思考消息不占行（详情在顶部折叠条）
     if (!textParts.length) continue;
+    if (lastShown !== m.sessionID) {
+      html += '<div class="act-session">── 会话 ' + m.sessionID.slice(4, 12) + " ──</div>";
+      lastShown = m.sessionID;
+    }
     html += '<div class="act-row ' + (isUser ? "right" : "left") + '">';
     html += '<div class="act-bubble ' + (isUser ? "user" : "agent") + '">';
     html += textParts.map((p) => '<div class="act-text">' + esc(p.text) + "</div>").join("");

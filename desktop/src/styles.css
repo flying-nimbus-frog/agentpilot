@@ -216,3 +216,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 12.5px;
 }
 .act-chips { margin-bottom: 6px; }
+.act-session {
+  text-align: center;
+  color: #8c959f;
+  font-size: 11px;
+  margin: 10px 0 6px;
+}
