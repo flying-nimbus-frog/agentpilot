@@ -39,11 +39,11 @@ def _auth_token() -> str:
     )
 
 
-def push(device_token: str, title: str, body: str) -> bool:
-    """发送一条 alert 推送。返回是否成功。"""
+def push(device_token: str, title: str, body: str) -> str:
+    """发送一条 alert 推送。返回: "ok" / "bad_token" / "error"。"""
     if not enabled():
         log.warning("[apns] 未配置，跳过推送: %s", title)
-        return False
+        return "error"
     import httpx
 
     payload = {
@@ -67,9 +67,13 @@ def push(device_token: str, title: str, body: str) -> bool:
             )
         if res.status_code == 200:
             log.info("[apns] 推送成功: %s", title)
-            return True
+            return "ok"
+        # BadDeviceToken(400) / Unregistered(410) = token 失效，调用方应清理
+        if res.status_code in (400, 410) and "BadDeviceToken" in res.text or "Unregistered" in res.text:
+            log.warning("[apns] token 失效: %s", res.text)
+            return "bad_token"
         log.error("[apns] 推送失败 %s: %s", res.status_code, res.text)
-        return False
+        return "error"
     except Exception as e:
         log.error("[apns] 推送异常: %s", e)
-        return False
+        return "error"

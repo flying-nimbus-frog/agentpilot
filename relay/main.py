@@ -414,7 +414,9 @@ async def api_devices_delete(device_id: str, authorization: str | None = Header(
 
 
 async def _send_push(token: str, title: str, body: str) -> None:
-    await asyncio.to_thread(apns.push, token, title, body)
+    result = await asyncio.to_thread(apns.push, token, title, body)
+    if result == "bad_token":
+        db.remove_push_token_by_token(token)
 
 
 # ---------- WebSocket 助手 ----------

@@ -271,3 +271,8 @@ def list_push_tokens(user_id: str) -> list[str]:
             "SELECT token FROM push_tokens WHERE user_id=?", (user_id,)
         ).fetchall()
     return [r["token"] for r in rows]
+
+
+def remove_push_token_by_token(token: str) -> None:
+    with _conn() as conn:
+        conn.execute("DELETE FROM push_tokens WHERE token=?", (token,))
