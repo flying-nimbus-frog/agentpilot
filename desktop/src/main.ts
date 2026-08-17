@@ -286,6 +286,17 @@ function closeSettings() {
 }
 $("btn-settings").onclick = openSettings;
 
+function switchTab(name: "activity" | "log") {
+  for (const t of ["activity", "log"] as const) {
+    const tb = document.getElementById(`tab-${t}`) as HTMLButtonElement | null;
+    const pn = document.getElementById(`pane-${t}`) as HTMLElement | null;
+    if (tb) tb.classList.toggle("active", t === name);
+    if (pn) pn.classList.toggle("active", t === name);
+  }
+}
+$("tab-activity").onclick = () => switchTab("activity");
+$("tab-log").onclick = () => switchTab("log");
+
 function currentAgentMode(): string {
   const m = document.querySelector('input[name="agent-mode"]:checked') as HTMLInputElement;
   return m ? m.value : "mini";
