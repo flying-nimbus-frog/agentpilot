@@ -345,7 +345,7 @@ def api_delete_account(
     if not body.password or not verify_password(
         body.password, user["salt"], user["password_hash"]
     ):
-        raise HTTPException(400, "密码错误，无法删除账号")
+        raise HTTPException(400, "Incorrect password")
     db.bump_session_version(user["id"])  # 吊销所有已签发 token
     db.delete_user(user["id"])
     return {"ok": True}
