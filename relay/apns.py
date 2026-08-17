@@ -54,17 +54,17 @@ def push(device_token: str, title: str, body: str) -> bool:
         }
     }
     try:
-        res = httpx.post(
-            f"{APNS_URL}/3/device/{device_token}",
-            json=payload,
-            headers={
-                "authorization": f"bearer {_auth_token()}",
-                "apns-topic": TOPIC,
-                "apns-push-type": "alert",
-                "apns-priority": "10",
-            },
-            timeout=10,
-        )
+        with httpx.Client(http2=True, timeout=10) as client:
+            res = client.post(
+                f"{APNS_URL}/3/device/{device_token}",
+                json=payload,
+                headers={
+                    "authorization": f"bearer {_auth_token()}",
+                    "apns-topic": TOPIC,
+                    "apns-push-type": "alert",
+                    "apns-priority": "10",
+                },
+            )
         if res.status_code == 200:
             log.info("[apns] 推送成功: %s", title)
             return True
