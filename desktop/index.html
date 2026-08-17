@@ -12,6 +12,7 @@
     <header>
       <div class="brand">📡 OpenCode Remote</div>
       <div class="status-bar">
+        <span id="st-account" class="chip gray">账号 --</span>
         <span id="st-relay" class="chip gray">中继 --</span>
         <span id="st-device" class="chip gray">设备 --</span>
         <span id="st-agent" class="chip gray">Agent --</span>
@@ -19,29 +20,10 @@
     </header>
 
     <nav>
-      <button id="tab-home" class="tab active">总览</button>
-      <button id="tab-activity" class="tab">活动</button>
+      <button id="tab-activity" class="tab active">活动</button>
       <button id="tab-log" class="tab">日志</button>
       <button id="btn-settings" class="tab" style="margin-left:auto">⚙️ 设置</button>
     </nav>
-
-    <!-- ============ 总览 ============ -->
-    <section id="pane-home" class="pane active">
-      <div class="card home-card">
-        <div id="home-status" class="home-status">
-          <div id="home-icon" class="home-icon gray">⚡</div>
-          <div class="home-text">
-            <div id="home-title" class="home-title">正在连接…</div>
-            <div id="home-sub" class="home-sub"></div>
-          </div>
-        </div>
-        <div class="home-meta">
-          <div id="home-account" class="home-meta-row"></div>
-          <div id="home-engine" class="home-meta-row"></div>
-        </div>
-        <button id="btn-home-action" class="primary hidden"></button>
-      </div>
-    </section>
 
     <!-- ============ 设置（弹窗） ============ -->
     <div id="settings-overlay" class="hidden">

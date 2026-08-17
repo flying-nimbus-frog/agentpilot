@@ -18,44 +18,11 @@ function setChip(el: HTMLElement, text: string, kind: "green" | "gray" | "orange
 }
 
 function refreshStatus() {
-  // 总览页：按状态显示引导或绿色状态
-  const icon = $("home-icon");
-  const title = $("home-title");
-  const sub = $("home-sub");
-  const action = $("btn-home-action") as HTMLButtonElement;
-  if (!st.loggedIn) {
-    icon.className = "home-icon gray";
-    icon.textContent = "🔒";
-    title.textContent = "尚未登录";
-    sub.textContent = "登录账号后即可绑定你的电脑设备";
-    action.textContent = "登录 / 注册";
-    action.classList.remove("hidden");
-    action.className = "primary";
-    action.onclick = openSettings;
-  } else if (!st.paired && !st.pending) {
-    icon.className = "home-icon orange";
-    icon.textContent = "📡";
-    title.textContent = "已登录，尚未绑定设备";
-    sub.textContent = "注册本机为设备，用手机扫码/输入配对码完成绑定";
-    action.textContent = "绑定设备";
-    action.classList.remove("hidden");
-    action.className = "primary";
-    action.onclick = openSettings;
-  } else {
-    icon.className = "home-icon green";
-    icon.textContent = "✅";
-    title.textContent = st.online ? "设备在线，随时待命" : "设备已绑定（离线）";
-    sub.textContent = st.pending ? "等待手机确认配对…" : "手机登录同一账号即可遥控";
-    action.classList.add("hidden");
-  }
-  $("home-account").textContent = st.loggedIn
-    ? `👤 ${($("in-email") as HTMLInputElement).value || "(已登录)"}`
-    : "";
-  $("home-engine").textContent = st.agentRunning
-    ? `🤖 引擎运行中 (${st.agentModel || ""})`
-    : st.loggedIn
-      ? "🤖 引擎未启动"
-      : "";
+  setChip(
+    $("st-account"),
+    st.loggedIn ? "账号 已登录" : "账号 未登录",
+    st.loggedIn ? "green" : "gray",
+  );
   setChip($("st-relay"), "中继 --", "gray");
   setChip(
     $("st-device"),
@@ -222,20 +189,6 @@ function logLine(line: string) {
 }
 
 // ---------- 页签 ----------
-function switchTab(name: "home" | "activity" | "log") {
-  for (const t of ["home", "activity", "log"] as const) {
-    $(`tab-${t}`).classList.toggle("active", t === name);
-    $(`pane-${t}`).classList.toggle("active", t === name);
-  }
-}
-$("tab-home").onclick = () => switchTab("home");
-$("tab-activity").onclick = () => switchTab("activity");
-$("tab-log").onclick = () => switchTab("log");
-
-
-// ---------- 动作 ----------
-const DEFAULT_RELAY = "https://relay.zhileai.net";
-
 async function loginHandler() {
   try {
     const user = await invoke("account_login", {
@@ -250,7 +203,6 @@ async function loginHandler() {
     $("account-msg").textContent = `❌ ${e}`;
   }
 }
-
 
 async function registerHandler() {
   try {
@@ -267,7 +219,6 @@ async function registerHandler() {
   }
 }
 
-
 async function deviceRegisterHandler() {
   try {
     const r = (await invoke("device_register")) as { pairingCode: string; expiresIn: number };
@@ -280,22 +231,20 @@ async function deviceRegisterHandler() {
   }
 }
 
-
 async function deviceUnbindHandler() {
   await invoke("device_unbind");
   refreshStatus();
 }
 
+const DEFAULT_RELAY = "https://relay.zhileai.net";
 
 // ---------- 设置弹窗 ----------
 function openSettings() {
   const content = $("settings-content");
-  // 设备页 + Agent 页内容合并进设置
   content.innerHTML =
     $("pane-device").innerHTML + "<hr/>" + $("pane-agent").innerHTML;
   $("settings-overlay").classList.remove("hidden");
   $("btn-settings-close").onclick = closeSettings;
-  // 重新绑定按钮
   $("btn-login").onclick = loginHandler;
   $("btn-register").onclick = registerHandler;
   $("btn-device-register").onclick = deviceRegisterHandler;
@@ -307,6 +256,7 @@ function openSettings() {
 function closeSettings() {
   $("settings-overlay").classList.add("hidden");
 }
+$("btn-settings").onclick = openSettings;
 
 function currentAgentMode(): string {
   const m = document.querySelector('input[name="agent-mode"]:checked') as HTMLInputElement;
