@@ -233,6 +233,30 @@ def api_plan_grant(body: PlanGrantIn):
     return {"ok": True, "plan": body.plan}
 
 
+_PRIVACY_DIR = os.path.join(os.path.dirname(__file__), "privacy-policy.{}.html")
+
+
+def _privacy_page(lang: str) -> HTMLResponse:
+    path = _PRIVACY_DIR.format("en" if lang == "en" else "zh")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return HTMLResponse(handle.read())
+    except OSError:
+        return HTMLResponse("Privacy policy unavailable.", status_code=404)
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+@app.get("/privacy.html", response_class=HTMLResponse)
+def privacy_page(lang: str = "") -> HTMLResponse:
+    """Serve the privacy policy (App Store requires a public HTTPS URL)."""
+    return _privacy_page(lang)
+
+
+@app.get("/privacy.en.html", response_class=HTMLResponse)
+def privacy_page_en() -> HTMLResponse:
+    return _privacy_page("en")
+
+
 @app.get("/api/verify", response_class=HTMLResponse)
 def api_verify(token: str, request: Request = None):
     """邮箱验证（邮件里的链接）。"""
