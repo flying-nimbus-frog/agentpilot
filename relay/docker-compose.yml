@@ -29,6 +29,12 @@ services:
       RELAY_PUBLIC_BASE: ${RELAY_PUBLIC_BASE:-https://relay.zhileai.net}
       # 套餐授权回调密钥（支付平台 webhook 对接用）
       RELAY_PLAN_SECRET: ${RELAY_PLAN_SECRET:-}
+      # APNs 推送（.p8 Auth Key）
+      RELAY_APNS_KEY_PATH: ${RELAY_APNS_KEY_PATH:-}
+      RELAY_APNS_KEY_ID: ${RELAY_APNS_KEY_ID:-}
+      RELAY_APNS_TEAM_ID: ${RELAY_APNS_TEAM_ID:-}
+      RELAY_APNS_TOPIC: ${RELAY_APNS_TOPIC:-net.zhileai.agentpilot}
+      RELAY_APNS_URL: ${RELAY_APNS_URL:-https://api.push.apple.com}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
