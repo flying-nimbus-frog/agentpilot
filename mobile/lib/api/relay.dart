@@ -114,14 +114,14 @@ class RelayApp {
   }
 
   /// 注册 APNs 推送 token
-  Future<void> registerPushToken(String token) async {
+  Future<void> registerPushToken(String deviceToken) async {
     final res = await http
         .post(Uri.parse('$_httpBase/api/push/register'),
             headers: {
               'Authorization': 'Bearer $token',
               'Content-Type': 'application/json',
             },
-            body: jsonEncode({'token': token}))
+            body: jsonEncode({'token': deviceToken}))
         .timeout(const Duration(seconds: 15));
     if (res.statusCode != 200) {
       // 推送注册失败不阻塞主流程
@@ -129,14 +129,14 @@ class RelayApp {
   }
 
   /// 注销 APNs 推送 token（退出登录）
-  Future<void> unregisterPushToken(String token) async {
+  Future<void> unregisterPushToken(String deviceToken) async {
     try {
       await http.delete(Uri.parse('$_httpBase/api/push/register'),
           headers: {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
           },
-          body: jsonEncode({'token': token}));
+          body: jsonEncode({'token': deviceToken}));
     } catch (_) {}
   }
 

@@ -69,7 +69,9 @@ def push(device_token: str, title: str, body: str) -> str:
             log.info("[apns] 推送成功: %s", title)
             return "ok"
         # BadDeviceToken(400) / Unregistered(410) = token 失效，调用方应清理
-        if res.status_code in (400, 410) and "BadDeviceToken" in res.text or "Unregistered" in res.text:
+        if (res.status_code in (400, 410)) and (
+            "BadDeviceToken" in res.text or "Unregistered" in res.text
+        ):
             log.warning("[apns] token 失效: %s", res.text)
             return "bad_token"
         log.error("[apns] 推送失败 %s: %s", res.status_code, res.text)
