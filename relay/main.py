@@ -517,9 +517,10 @@ async def ws_device(ws: WebSocket):
                     device["user_id"],
                     {"type": "event", "event": msg.get("event")},
                 )
-                # 审批/补充信息 → APNs 推送（手机后台也能收到提醒）
+                # 审批/补充信息/任务完成 → APNs 推送（手机后台也能收到提醒）
                 ev = msg.get("event") or {}
-                if ev.get("type") in ("permission.asked", "permission.ask"):
+                ev_type = ev.get("type")
+                if ev_type in ("permission.asked", "permission.ask"):
                     props = ev.get("properties") or {}
                     tool = props.get("permission") or props.get("tool") or "unknown"
                     user_text = props.get("userText") or ""
@@ -527,6 +528,12 @@ async def ws_device(ws: WebSocket):
                     body = user_text if user_text else f"Agent 请求执行: {tool}"
                     for tkn in db.list_push_tokens(device["user_id"]):
                         asyncio.create_task(_send_push(tkn, title, body))
+                elif ev_type == "session.idle":
+                    # 任务完成提醒（前台不弹横幅，仅后台/锁屏提醒）
+                    for tkn in db.list_push_tokens(device["user_id"]):
+                        asyncio.create_task(
+                            _send_push(tkn, "任务完成", "你交给电脑的任务已执行完毕")
+                        )
     except WebSocketDisconnect:
         pass
     finally:
