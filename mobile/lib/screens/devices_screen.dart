@@ -113,6 +113,82 @@ class _DevicesScreenState extends State<DevicesScreen> {
     );
   }
 
+  /// In-app account deletion (App Store 5.1.1(v) requirement).
+  Future<void> _deleteAccount() async {
+    final passwordController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除账号'),
+        content: StatefulBuilder(
+          builder: (dialogContext, setDialogState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '删除后账号、设备绑定和推送设置将被永久清除，且无法恢复。此操作不可撤销。',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '输入密码确认',
+                  border: OutlineInputBorder(),
+                ),
+                autofocus: true,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('永久删除'),
+          ),
+        ],
+      ),
+    );
+    final password = passwordController.text;
+    if (confirmed != true || password.isEmpty) return;
+
+    try {
+      await widget.app.deleteAccount(password);
+      await widget.app.close();
+      await SessionStore.clear();
+      if (!mounted) return;
+      final nav = Navigator.of(context);
+      await nav.pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => LoginScreen(
+            savedUrl: widget.app.relayUrl,
+            onLoggedIn: (app) async {
+              await SessionStore.save(app.relayUrl, app.token, app.email);
+              await app.fetchDevices();
+              await app.connect();
+              if (!nav.mounted) return;
+              await nav.pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => DevicesScreen(app: app)),
+                (_) => false,
+              );
+            },
+          ),
+        ),
+        (_) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('删除失败: $e')));
+    }
+  }
+
   Future<void> _pair(Device d) async {
     final codeCtrl = TextEditingController();
     final code = await showDialog<String>(
@@ -185,6 +261,19 @@ class _DevicesScreenState extends State<DevicesScreen> {
             tooltip: '退出登录',
             icon: const Icon(Icons.logout),
             onPressed: _logout,
+          ),
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            onSelected: (value) {
+              if (value == 'delete') _deleteAccount();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'delete',
+                child: Text('删除账号',
+                    style: TextStyle(color: Colors.red, fontSize: 13)),
+              ),
+            ],
           ),
         ],
       ),

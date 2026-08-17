@@ -114,6 +114,27 @@ class RelayApp {
   }
 
   /// 注册 APNs 推送 token
+  /// Permanently delete this account (password required).
+  ///
+  /// App Store (5.1.1 v) requires an in-app account deletion flow; the
+  /// server revokes all sessions, devices, and push tokens before deleting.
+  Future<void> deleteAccount(String password) async {
+    final res = await http
+        .delete(Uri.parse('$_httpBase/api/account'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'password': password}))
+        .timeout(const Duration(seconds: 15));
+    final data = jsonDecode(utf8.decode(res.bodyBytes));
+    if (res.statusCode >= 400) {
+      throw ApiError((data is Map && data['detail'] != null)
+          ? data['detail'].toString()
+          : 'HTTP ${res.statusCode}');
+    }
+  }
+
   Future<void> registerPushToken(String deviceToken) async {
     final res = await http
         .post(Uri.parse('$_httpBase/api/push/register'),

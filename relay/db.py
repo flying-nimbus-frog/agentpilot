@@ -276,3 +276,12 @@ def list_push_tokens(user_id: str) -> list[str]:
 def remove_push_token_by_token(token: str) -> None:
     with _conn() as conn:
         conn.execute("DELETE FROM push_tokens WHERE token=?", (token,))
+
+
+def delete_user(user_id: str) -> None:
+    """Irreversibly delete an account and all of its data (devices, push tokens)."""
+    with _conn() as conn:
+        conn.execute("DELETE FROM devices WHERE user_id=?", (user_id,))
+        conn.execute("DELETE FROM push_tokens WHERE user_id=?", (user_id,))
+        conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+        conn.commit()

@@ -97,6 +97,10 @@ class PairIn(BaseModel):
     code: str
 
 
+class DeleteAccountIn(BaseModel):
+    password: str
+
+
 # ---------- REST ----------
 
 def _client_ip(request: Request) -> str:
@@ -300,6 +304,27 @@ def api_reset_password(body: ResetIn, request: Request):
         )
     db.bump_session_version(user_id)  # 重置后所有旧登录失效
     return {"ok": True, "message": "Password has been reset, please log in again"}
+
+
+@app.delete("/api/account")
+def api_delete_account(
+    body: DeleteAccountIn,
+    authorization: str | None = Header(None),
+) -> dict:
+    """Irreversibly delete the caller's account (password required).
+
+    Revokes every session first, then removes devices and push tokens so no
+    token can be used after deletion. App Store requires an in-app account
+    deletion flow; this is its server side.
+    """
+    user = _require_user(authorization)
+    if not body.password or not verify_password(
+        body.password, user["salt"], user["password_hash"]
+    ):
+        raise HTTPException(400, "密码错误，无法删除账号")
+    db.bump_session_version(user["id"])  # 吊销所有已签发 token
+    db.delete_user(user["id"])
+    return {"ok": True}
 
 
 @app.post("/api/sessions/revoke")
