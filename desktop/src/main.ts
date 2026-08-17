@@ -242,14 +242,43 @@ function openSettings() {
   const content = $("settings-content");
   content.innerHTML =
     $("pane-device").innerHTML + "<hr/>" + $("pane-agent").innerHTML;
+  // 根据状态隐藏无关区块
+  const loginCard = content.querySelector(".card:first-child");
+  const deviceCard = content.querySelector(".card:nth-child(2)");
+  if (st.loggedIn && loginCard) {
+    // 已登录：登录框替换为账号信息
+    loginCard.innerHTML =
+      "<h3>账号</h3>" +
+      '<div class="msg">👤 ' + esc((($("in-email") as HTMLInputElement).value || String(st.email || ""))) + "</div>" +
+      '<div class="btns"><button class="danger" id="btn-logout-s">退出登录</button></div>' +
+      '<p id="logout-msg" class="msg"></p>';
+    $("btn-logout-s").onclick = () => {
+      invoke("device_unbind");
+      invoke("settings_save", { settings: JSON.parse(JSON.stringify({})) }).catch(() => {});
+    };
+  }
+  if (st.paired && deviceCard) {
+    // 已绑定：隐藏"注册本机为设备"，只留解绑
+    const regBtn = content.querySelector("#btn-device-register");
+    if (regBtn) regBtn.classList.add("hidden");
+    $("device-status").textContent = st.online ? "✅ 已配对（在线）" : "✅ 已配对（离线）";
+  } else if (deviceCard) {
+    $("device-status").textContent = "未绑定设备";
+  }
   $("settings-overlay").classList.remove("hidden");
   $("btn-settings-close").onclick = closeSettings;
-  $("btn-login").onclick = loginHandler;
-  $("btn-register").onclick = registerHandler;
-  $("btn-device-register").onclick = deviceRegisterHandler;
-  $("btn-device-unbind").onclick = deviceUnbindHandler;
-  $("btn-agent-start").onclick = agentStartHandler;
-  $("btn-agent-stop").onclick = agentStopHandler;
+  const l = content.querySelector("#btn-login") as HTMLButtonElement | null;
+  if (l) l.onclick = loginHandler;
+  const r = content.querySelector("#btn-register") as HTMLButtonElement | null;
+  if (r) r.onclick = registerHandler;
+  const dr = content.querySelector("#btn-device-register") as HTMLButtonElement | null;
+  if (dr) dr.onclick = deviceRegisterHandler;
+  const du = content.querySelector("#btn-device-unbind") as HTMLButtonElement | null;
+  if (du) du.onclick = deviceUnbindHandler;
+  const as = content.querySelector("#btn-agent-start") as HTMLButtonElement | null;
+  if (as) as.onclick = agentStartHandler;
+  const ap = content.querySelector("#btn-agent-stop") as HTMLButtonElement | null;
+  if (ap) ap.onclick = agentStopHandler;
   refreshStatus();
 }
 function closeSettings() {
