@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'api/relay.dart';
-import 'screens/devices_screen.dart';
+import 'screens/sessions_screen.dart';
 import 'screens/login_screen.dart';
 import 'store/session_store.dart';
 
@@ -39,7 +39,7 @@ class OpenCodeRemoteApp extends StatelessWidget {
                 if (!snapshot.hasData) {
                   return const Scaffold(body: Center(child: CircularProgressIndicator()));
                 }
-                return DevicesScreen(app: snapshot.data as RelayApp);
+                return SessionsScreen(app: snapshot.data as RelayApp);
               },
             ),
     );
@@ -61,7 +61,7 @@ class OpenCodeRemoteApp extends StatelessWidget {
     await app.fetchDevices();
     await app.connect();
     await navigatorKey.currentState!.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => DevicesScreen(app: app)),
+      MaterialPageRoute(builder: (_) => SessionsScreen(app: app)),
       (_) => false,
     );
   }
