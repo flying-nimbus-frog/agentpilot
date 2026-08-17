@@ -20,7 +20,9 @@ function setChip(el: HTMLElement, text: string, kind: "green" | "gray" | "orange
 function refreshStatus() {
   setChip(
     $("st-account"),
-    st.loggedIn ? "账号 已登录" : "账号 未登录",
+    st.loggedIn
+      ? "账号 " + (($("in-email") as HTMLInputElement).value || String(st.email || ""))
+      : "账号 未登录",
     st.loggedIn ? "green" : "gray",
   );
   setChip(
@@ -196,6 +198,7 @@ async function loginHandler() {
       password: ($("in-pass") as HTMLInputElement).value,
     });
     st.loggedIn = true;
+    st.email = (user as any).email || "";
     $("account-msg").textContent = `✅ 已登录 ${(user as any).email}`;
     refreshStatus();
   } catch (e) {
@@ -211,6 +214,7 @@ async function registerHandler() {
       password: ($("in-pass") as HTMLInputElement).value,
     });
     st.loggedIn = true;
+    st.email = (user as any).email || "";
     $("account-msg").textContent = `✅ 已注册并登录 ${(user as any).email}`;
     refreshStatus();
   } catch (e) {
@@ -367,7 +371,10 @@ async function init() {
 
   try {
     const settings = (await invoke("settings_get")) as any;
-    if (settings.email) ($("in-email") as HTMLInputElement).value = settings.email;
+    if (settings.email) {
+      ($("in-email") as HTMLInputElement).value = settings.email;
+      st.email = settings.email;
+    }
     if (settings.api_base) ($("in-api-base") as HTMLInputElement).value = settings.api_base;
     if (settings.api_key) ($("in-api-key") as HTMLInputElement).value = settings.api_key;
     if (settings.model) ($("in-model") as HTMLInputElement).value = settings.model;
