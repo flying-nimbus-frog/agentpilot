@@ -51,11 +51,15 @@ class _DevicesScreenState extends State<DevicesScreen> {
     }
   }
 
-  /// 请求推送权限并注册 APNs token
+  /// 请求推送权限并注册 APNs token（token 异步到达，监听回调）
   Future<void> _initPush() async {
     try {
       final granted = await Apns.requestPermission();
       if (!granted) return;
+      Apns.onToken((token) {
+        widget.app.registerPushToken(token);
+      });
+      // 已就绪的情况（重新打开 App）
       final token = await Apns.getToken();
       if (token != null && token.isNotEmpty) {
         await widget.app.registerPushToken(token);
