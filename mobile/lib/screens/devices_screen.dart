@@ -20,6 +20,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
   List<Device> get _devices => widget.app.devices;
   String? _error;
   String _connState = '连接中…';
+  String _pushState = '推送: 初始化…';
 
   @override
   void initState() {
@@ -55,14 +56,19 @@ class _DevicesScreenState extends State<DevicesScreen> {
   Future<void> _initPush() async {
     try {
       final granted = await Apns.requestPermission();
-      if (!granted) return;
-      Apns.onToken((token) {
-        widget.app.registerPushToken(token);
+      if (!granted) {
+        setState(() => _pushState = '⚠️ 推送未授权（设置→AgentPilot→通知）');
+        return;
+      }
+      setState(() => _pushState = '推送: 等待 token…');
+      Apns.onToken((token) async {
+        await widget.app.registerPushToken(token);
+        if (mounted) setState(() => _pushState = '✅ 推送已注册');
       });
-      // 已就绪的情况（重新打开 App）
       final token = await Apns.getToken();
       if (token != null && token.isNotEmpty) {
         await widget.app.registerPushToken(token);
+        if (mounted) setState(() => _pushState = '✅ 推送已注册');
       }
     } catch (_) {}
   }
@@ -250,6 +256,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
                 ),
               ),
             ),
+            Text(_pushState,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF57606A))),
+            const SizedBox(height: 8),
             if (_devices.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 80),
