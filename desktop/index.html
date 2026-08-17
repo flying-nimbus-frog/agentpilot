@@ -19,14 +19,37 @@
     </header>
 
     <nav>
-      <button id="tab-device" class="tab active">设备</button>
-      <button id="tab-agent" class="tab">Agent</button>
+      <button id="tab-home" class="tab active">总览</button>
       <button id="tab-activity" class="tab">活动</button>
       <button id="tab-log" class="tab">日志</button>
+      <button id="btn-settings" class="tab" style="margin-left:auto">⚙️ 设置</button>
     </nav>
 
-    <!-- ============ 设备 ============ -->
-    <section id="pane-device" class="pane active">
+    <!-- ============ 总览 ============ -->
+    <section id="pane-home" class="pane active">
+      <div class="card">
+        <h3>运行状态</h3>
+        <p id="home-device" class="msg">未登录</p>
+        <p id="home-account" class="msg"></p>
+        <p id="home-engine" class="msg"></p>
+        <div class="btns">
+          <button id="btn-home-open-login" class="primary">登录 / 绑定设备</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 设置（弹窗） ============ -->
+    <div id="settings-overlay" class="hidden">
+      <div class="ov-panel settings-panel">
+        <div class="ov-head">⚙️ 设置 <button id="btn-settings-close">✕</button></div>
+        <div class="ov-body settings-body">
+          <div id="settings-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 设备（设置弹窗内） ============ -->
+    <section id="pane-device" class="pane">
       <div class="card">
         <h3>账号</h3>
         <div class="row2">

@@ -18,6 +18,18 @@ function setChip(el: HTMLElement, text: string, kind: "green" | "gray" | "orange
 }
 
 function refreshStatus() {
+  // 总览页
+  $("home-account").textContent = st.loggedIn
+    ? `账号: ${($("in-email") as HTMLInputElement).value || "(已登录)"}`
+    : "账号: 未登录";
+  $("home-device").textContent = st.paired
+    ? "设备: 已配对" + (st.online ? "（在线）" : "（离线）")
+    : st.pending
+      ? "设备: 待配对"
+      : "设备: 未绑定";
+  $("home-engine").textContent = st.agentRunning
+    ? `引擎: 运行中 (${st.agentModel || ""})`
+    : "引擎: 未启动";
   setChip($("st-relay"), "中继 --", "gray");
   setChip(
     $("st-device"),
@@ -184,21 +196,21 @@ function logLine(line: string) {
 }
 
 // ---------- 页签 ----------
-function switchTab(name: "device" | "agent" | "activity" | "log") {
-  for (const t of ["device", "agent", "activity", "log"] as const) {
+function switchTab(name: "home" | "activity" | "log") {
+  for (const t of ["home", "activity", "log"] as const) {
     $(`tab-${t}`).classList.toggle("active", t === name);
     $(`pane-${t}`).classList.toggle("active", t === name);
   }
 }
-$("tab-device").onclick = () => switchTab("device");
-$("tab-agent").onclick = () => switchTab("agent");
+$("tab-home").onclick = () => switchTab("home");
 $("tab-activity").onclick = () => switchTab("activity");
 $("tab-log").onclick = () => switchTab("log");
+$("btn-home-open-login").onclick = () => openSettings();
 
 // ---------- 动作 ----------
 const DEFAULT_RELAY = "https://relay.zhileai.net";
 
-$("btn-login").onclick = async () => {
+async function loginHandler() {
   try {
     const user = await invoke("account_login", {
       relayUrl: DEFAULT_RELAY,
@@ -211,9 +223,10 @@ $("btn-login").onclick = async () => {
   } catch (e) {
     $("account-msg").textContent = `❌ ${e}`;
   }
-};
+}
 
-$("btn-register").onclick = async () => {
+
+async function registerHandler() {
   try {
     const user = await invoke("account_register", {
       relayUrl: DEFAULT_RELAY,
@@ -226,9 +239,10 @@ $("btn-register").onclick = async () => {
   } catch (e) {
     $("account-msg").textContent = `❌ ${e}`;
   }
-};
+}
 
-$("btn-device-register").onclick = async () => {
+
+async function deviceRegisterHandler() {
   try {
     const r = (await invoke("device_register")) as { pairingCode: string; expiresIn: number };
     st.pending = true;
@@ -238,12 +252,35 @@ $("btn-device-register").onclick = async () => {
   } catch (e) {
     $("device-msg").textContent = `❌ ${e}`;
   }
-};
+}
 
-$("btn-device-unbind").onclick = async () => {
+
+async function deviceUnbindHandler() {
   await invoke("device_unbind");
   refreshStatus();
-};
+}
+
+
+// ---------- 设置弹窗 ----------
+function openSettings() {
+  const content = $("settings-content");
+  // 设备页 + Agent 页内容合并进设置
+  content.innerHTML =
+    $("pane-device").innerHTML + "<hr/>" + $("pane-agent").innerHTML;
+  $("settings-overlay").classList.remove("hidden");
+  $("btn-settings-close").onclick = closeSettings;
+  // 重新绑定按钮
+  $("btn-login").onclick = loginHandler;
+  $("btn-register").onclick = registerHandler;
+  $("btn-device-register").onclick = deviceRegisterHandler;
+  $("btn-device-unbind").onclick = deviceUnbindHandler;
+  $("btn-agent-start").onclick = agentStartHandler;
+  $("btn-agent-stop").onclick = agentStopHandler;
+  refreshStatus();
+}
+function closeSettings() {
+  $("settings-overlay").classList.add("hidden");
+}
 
 function currentAgentMode(): string {
   const m = document.querySelector('input[name="agent-mode"]:checked') as HTMLInputElement;
@@ -258,7 +295,7 @@ for (const r of document.querySelectorAll('input[name="agent-mode"]')) {
   };
 }
 
-$("btn-agent-start").onclick = async () => {
+async function agentStartHandler() {
   const mode = currentAgentMode();
   const apiBase = ($("in-api-base") as HTMLInputElement).value.trim();
   const apiKey = ($("in-api-key") as HTMLInputElement).value.trim();
@@ -288,9 +325,10 @@ $("btn-agent-start").onclick = async () => {
     $("agent-msg").textContent = `❌ 启动失败: ${e}`;
     $("agent-msg").style.color = "#cf222e";
   }
-};
+}
 
-$("btn-agent-stop").onclick = async () => {
+
+async function agentStopHandler() {
   try {
     await invoke("agent_stop");
     st.agentRunning = false;
@@ -301,7 +339,8 @@ $("btn-agent-stop").onclick = async () => {
   } catch (e) {
     $("agent-msg").textContent = `❌ ${e}`;
   }
-};
+}
+
 
 // ---------- 初始化 ----------
 async function init() {
