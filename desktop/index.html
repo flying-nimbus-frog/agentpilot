@@ -27,14 +27,19 @@
 
     <!-- ============ 总览 ============ -->
     <section id="pane-home" class="pane active">
-      <div class="card">
-        <h3>运行状态</h3>
-        <p id="home-device" class="msg">未登录</p>
-        <p id="home-account" class="msg"></p>
-        <p id="home-engine" class="msg"></p>
-        <div class="btns">
-          <button id="btn-home-open-login" class="primary">登录 / 绑定设备</button>
+      <div class="card home-card">
+        <div id="home-status" class="home-status">
+          <div id="home-icon" class="home-icon gray">⚡</div>
+          <div class="home-text">
+            <div id="home-title" class="home-title">正在连接…</div>
+            <div id="home-sub" class="home-sub"></div>
+          </div>
         </div>
+        <div class="home-meta">
+          <div id="home-account" class="home-meta-row"></div>
+          <div id="home-engine" class="home-meta-row"></div>
+        </div>
+        <button id="btn-home-action" class="primary hidden"></button>
       </div>
     </section>
 

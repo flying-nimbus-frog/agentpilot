@@ -222,3 +222,20 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 11px;
   margin: 10px 0 6px;
 }
+
+/* ---------- 总览页 ---------- */
+.home-card { padding: 28px 24px; }
+.home-status { display: flex; align-items: center; gap: 16px; }
+.home-icon {
+  width: 64px; height: 64px; border-radius: 32px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px;
+}
+.home-icon.green { background: #dafbe1; }
+.home-icon.gray { background: #eaeef2; }
+.home-icon.orange { background: #fff8c5; }
+.home-title { font-size: 20px; font-weight: 700; color: #1f2328; }
+.home-sub { margin-top: 4px; font-size: 13px; color: var(--dim); }
+.home-meta { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 14px; }
+.home-meta-row { font-size: 13px; color: var(--dim); margin-bottom: 6px; }
+#btn-home-action { margin-top: 18px; width: 100%; }

@@ -18,18 +18,44 @@ function setChip(el: HTMLElement, text: string, kind: "green" | "gray" | "orange
 }
 
 function refreshStatus() {
-  // 总览页
+  // 总览页：按状态显示引导或绿色状态
+  const icon = $("home-icon");
+  const title = $("home-title");
+  const sub = $("home-sub");
+  const action = $("btn-home-action") as HTMLButtonElement;
+  if (!st.loggedIn) {
+    icon.className = "home-icon gray";
+    icon.textContent = "🔒";
+    title.textContent = "尚未登录";
+    sub.textContent = "登录账号后即可绑定你的电脑设备";
+    action.textContent = "登录 / 注册";
+    action.classList.remove("hidden");
+    action.className = "primary";
+    action.onclick = openSettings;
+  } else if (!st.paired && !st.pending) {
+    icon.className = "home-icon orange";
+    icon.textContent = "📡";
+    title.textContent = "已登录，尚未绑定设备";
+    sub.textContent = "注册本机为设备，用手机扫码/输入配对码完成绑定";
+    action.textContent = "绑定设备";
+    action.classList.remove("hidden");
+    action.className = "primary";
+    action.onclick = openSettings;
+  } else {
+    icon.className = "home-icon green";
+    icon.textContent = "✅";
+    title.textContent = st.online ? "设备在线，随时待命" : "设备已绑定（离线）";
+    sub.textContent = st.pending ? "等待手机确认配对…" : "手机登录同一账号即可遥控";
+    action.classList.add("hidden");
+  }
   $("home-account").textContent = st.loggedIn
-    ? `账号: ${($("in-email") as HTMLInputElement).value || "(已登录)"}`
-    : "账号: 未登录";
-  $("home-device").textContent = st.paired
-    ? "设备: 已配对" + (st.online ? "（在线）" : "（离线）")
-    : st.pending
-      ? "设备: 待配对"
-      : "设备: 未绑定";
+    ? `👤 ${($("in-email") as HTMLInputElement).value || "(已登录)"}`
+    : "";
   $("home-engine").textContent = st.agentRunning
-    ? `引擎: 运行中 (${st.agentModel || ""})`
-    : "引擎: 未启动";
+    ? `🤖 引擎运行中 (${st.agentModel || ""})`
+    : st.loggedIn
+      ? "🤖 引擎未启动"
+      : "";
   setChip($("st-relay"), "中继 --", "gray");
   setChip(
     $("st-device"),
@@ -205,7 +231,7 @@ function switchTab(name: "home" | "activity" | "log") {
 $("tab-home").onclick = () => switchTab("home");
 $("tab-activity").onclick = () => switchTab("activity");
 $("tab-log").onclick = () => switchTab("log");
-$("btn-home-open-login").onclick = () => openSettings();
+
 
 // ---------- 动作 ----------
 const DEFAULT_RELAY = "https://relay.zhileai.net";
