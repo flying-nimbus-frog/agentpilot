@@ -239,3 +239,17 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .home-meta { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 14px; }
 .home-meta-row { font-size: 13px; color: var(--dim); margin-bottom: 6px; }
 #btn-home-action { margin-top: 18px; width: 100%; }
+
+/* ---------- 设置弹窗（居中） ---------- */
+#settings-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 999;
+}
+.settings-panel {
+  width: min(520px, 90vw);
+  max-height: 80vh;
+}
+.settings-body { overflow-y: auto; }
+.settings-body .card { margin-bottom: 12px; }

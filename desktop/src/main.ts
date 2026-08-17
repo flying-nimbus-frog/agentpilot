@@ -23,7 +23,6 @@ function refreshStatus() {
     st.loggedIn ? "账号 已登录" : "账号 未登录",
     st.loggedIn ? "green" : "gray",
   );
-  setChip($("st-relay"), "中继 --", "gray");
   setChip(
     $("st-device"),
     st.paired ? "设备 已配对" : st.pending ? "设备 待配对" : st.loggedIn ? "设备 未绑定" : "设备 未登录",
