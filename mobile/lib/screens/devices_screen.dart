@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../api/protocol.dart';
 import '../api/relay.dart';
+import '../push/apns.dart';
 import '../store/session_store.dart';
 import 'login_screen.dart';
 import 'sessions_screen.dart';
@@ -23,6 +24,8 @@ class _DevicesScreenState extends State<DevicesScreen> {
   @override
   void initState() {
     super.initState();
+    widget.app.fetchPlan();
+    _initPush();
     widget.app.events.listen((ev) {
       // 审批/补充信息请求到达：震动 + 提示音（全局，任何页面都生效）
       final t = ev['type'];
@@ -48,6 +51,18 @@ class _DevicesScreenState extends State<DevicesScreen> {
     }
   }
 
+  /// 请求推送权限并注册 APNs token
+  Future<void> _initPush() async {
+    try {
+      final granted = await Apns.requestPermission();
+      if (!granted) return;
+      final token = await Apns.getToken();
+      if (token != null && token.isNotEmpty) {
+        await widget.app.registerPushToken(token);
+      }
+    } catch (_) {}
+  }
+
   Future<void> _refresh() async {
     try {
       await widget.app.fetchDevices();
@@ -58,6 +73,12 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 
   Future<void> _logout() async {
+    try {
+      final t = await Apns.getToken();
+      if (t != null && t.isNotEmpty) {
+        await widget.app.unregisterPushToken(t);
+      }
+    } catch (_) {}
     await widget.app.close();
     await SessionStore.clear();
     if (!mounted) return;

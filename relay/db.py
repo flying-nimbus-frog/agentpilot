@@ -27,6 +27,13 @@ def init_db() -> None:
                 session_version INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS push_tokens (
+                user_id TEXT NOT NULL,
+                token TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                last_seen INTEGER NOT NULL,
+                PRIMARY KEY (user_id, token)
+            );
             CREATE TABLE IF NOT EXISTS devices (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL REFERENCES users(id),
@@ -240,3 +247,27 @@ def delete_device(user_id: str, device_id: str) -> bool:
             "DELETE FROM devices WHERE id=? AND user_id=?", (device_id, user_id)
         )
         return cur.rowcount > 0
+
+
+def save_push_token(user_id: str, token: str) -> None:
+    now = int(time.time() * 1000)
+    with _conn() as conn:
+        conn.execute(
+            """INSERT INTO push_tokens (user_id, token, created_at, last_seen)
+               VALUES (?,?,?,?)
+               ON CONFLICT(user_id, token) DO UPDATE SET last_seen=excluded.last_seen""",
+            (user_id, token, now, now),
+        )
+
+
+def remove_push_token(user_id: str, token: str) -> None:
+    with _conn() as conn:
+        conn.execute("DELETE FROM push_tokens WHERE user_id=? AND token=?", (user_id, token))
+
+
+def list_push_tokens(user_id: str) -> list[str]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT token FROM push_tokens WHERE user_id=?", (user_id,)
+        ).fetchall()
+    return [r["token"] for r in rows]

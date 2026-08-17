@@ -8,6 +8,7 @@ import time
 import db
 import dotenv
 import mailer
+import apns
 import pages
 from auth import (
     create_one_time_token,
@@ -74,6 +75,10 @@ class DeviceIn(BaseModel):
 
 class ForgotIn(BaseModel):
     email: str
+
+
+class PushTokenIn(BaseModel):
+    token: str
 
 
 class PlanGrantIn(BaseModel):
@@ -175,6 +180,24 @@ def _require_user(authorization: str | None) -> dict:
     if payload.get("ver", 0) != user["session_version"]:
         raise HTTPException(401, "Session revoked, please log in again")
     return user
+
+
+@app.post("/api/push/register")
+def api_push_register(body: PushTokenIn, authorization: str | None = Header(None)):
+    """手机端注册 APNs 推送 token（登录后调用）。"""
+    user = _require_user(authorization)
+    if not body.token:
+        raise HTTPException(400, "token required")
+    db.save_push_token(user["id"], body.token)
+    return {"ok": True, "pushEnabled": apns.enabled()}
+
+
+@app.delete("/api/push/register")
+def api_push_unregister(body: PushTokenIn, authorization: str | None = Header(None)):
+    """注销推送 token（退出登录时调用）。"""
+    user = _require_user(authorization)
+    db.remove_push_token(user["id"], body.token)
+    return {"ok": True}
 
 
 @app.get("/api/plan")
@@ -390,6 +413,10 @@ async def api_devices_delete(device_id: str, authorization: str | None = Header(
     return {"ok": True}
 
 
+async def _send_push(token: str, title: str, body: str) -> None:
+    await asyncio.to_thread(apns.push, token, title, body)
+
+
 # ---------- WebSocket 助手 ----------
 
 async def ws_recv(ws: WebSocket):
@@ -490,6 +517,16 @@ async def ws_device(ws: WebSocket):
                     device["user_id"],
                     {"type": "event", "event": msg.get("event")},
                 )
+                # 审批/补充信息 → APNs 推送（手机后台也能收到提醒）
+                ev = msg.get("event") or {}
+                if ev.get("type") in ("permission.asked", "permission.ask"):
+                    props = ev.get("properties") or {}
+                    tool = props.get("permission") or props.get("tool") or "unknown"
+                    user_text = props.get("userText") or ""
+                    title = "需要你的授权" if not user_text else "需要补充信息"
+                    body = user_text if user_text else f"Agent 请求执行: {tool}"
+                    for tkn in db.list_push_tokens(device["user_id"]):
+                        asyncio.create_task(_send_push(tkn, title, body))
     except WebSocketDisconnect:
         pass
     finally:

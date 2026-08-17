@@ -113,6 +113,33 @@ class RelayApp {
     await _post('$relayUrl/api/forgot-password', {'email': email});
   }
 
+  /// 注册 APNs 推送 token
+  Future<void> registerPushToken(String token) async {
+    final res = await http
+        .post(Uri.parse('$_httpBase/api/push/register'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'token': token}))
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) {
+      // 推送注册失败不阻塞主流程
+    }
+  }
+
+  /// 注销 APNs 推送 token（退出登录）
+  Future<void> unregisterPushToken(String token) async {
+    try {
+      await http.delete(Uri.parse('$_httpBase/api/push/register'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'token': token}));
+    } catch (_) {}
+  }
+
   /// 拉取当前套餐信息
   Future<void> fetchPlan() async {
     final res = await http
