@@ -59,6 +59,9 @@ nav {
 .pane { display: none; padding: 16px 24px; max-width: 1600px; margin: 0 auto; width: 100%; box-sizing: border-box; }
 .pane.active { display: block; }
 
+/* 活动/日志为全屏工作区：解除 max-width 限制，占满窗口宽度 */
+#pane-activity, #pane-log { max-width: none; }
+
 .card {
   background: var(--card);
   border: 1px solid var(--border);
