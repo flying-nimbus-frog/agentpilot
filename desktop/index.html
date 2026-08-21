@@ -19,7 +19,8 @@
     </header>
 
     <nav>
-      <button id="tab-activity" class="tab active">活动</button>
+      <button id="tab-interface" class="tab active">Agent 界面</button>
+      <button id="tab-activity" class="tab">活动</button>
       <button id="tab-log" class="tab">日志</button>
       <button id="btn-settings" class="tab" style="margin-left:auto">⚙️ 设置</button>
     </nav>
@@ -96,6 +97,15 @@
           <label>模型（必填，费用透明）</label>
           <input id="in-opencode-model" placeholder="deepseek/deepseek-v4-flash" />
           <p class="dim">格式 provider/model，不填则使用 opencode 默认模型（可能产生未知费用）</p>
+          <label>思考力度（省 token）</label>
+          <select id="in-opencode-variant">
+            <option value="off">关闭思考（最省 token，推荐）</option>
+            <option value="low">低（省 token）</option>
+            <option value="high">高</option>
+            <option value="max">最大（最耗 token）</option>
+            <option value="">默认（交给 opencode）</option>
+          </select>
+          <p class="dim">关闭思考时模型不输出思考内容，能显著降低 token 消耗。仅 opencode 引擎生效。</p>
           <label>权限配置（可选，JSON）</label>
           <textarea id="in-permission" rows="2" placeholder='{"bash":"ask"}'></textarea>
         </div>
@@ -105,6 +115,16 @@
           <button id="btn-agent-stop" class="danger">停止 Agent</button>
         </div>
         <p id="agent-msg" class="msg"></p>
+      </div>
+    </section>
+
+    <!-- ============ Agent 界面（opencode Web UI 内嵌） ============ -->
+    <section id="pane-interface" class="pane">
+      <div id="interface-wrap" class="interface-wrap">
+        <div id="interface-hint" class="dim">
+          Agent 未启动。请先在「⚙️ 设置」中启动 Agent，opencode 完整界面将在此显示。
+        </div>
+        <iframe id="oc-frame" class="oc-frame" title="opencode Agent 界面"></iframe>
       </div>
     </section>
 

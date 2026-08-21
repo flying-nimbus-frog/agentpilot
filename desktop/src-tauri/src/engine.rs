@@ -190,6 +190,7 @@ pub async fn run(
                         None => Box::pin(std::future::ready(None)),
                     };
                 let forced_model = s.opencode_model.clone();
+                let forced_variant = s.opencode_variant.clone();
                 let ping_fut: std::pin::Pin<Box<dyn Future<Output = bool> + Send>> =
                     match ping_interval.as_mut() {
                         Some(iv) => Box::pin(async move {
@@ -201,7 +202,7 @@ pub async fn run(
                 tokio::select! {
                     msg = recv_relay => {
                         match msg {
-                            Some(v) => handle_relay_msg(&app, sink, &v, &mini, &opencode, &mode, &agent_tx, forced_model.clone()).await,
+                            Some(v) => handle_relay_msg(&app, sink, &v, &mini, &opencode, &mode, &agent_tx, forced_model.clone(), forced_variant.clone()).await,
                             None => disconnected = true,
                         }
                     }
@@ -245,6 +246,7 @@ async fn handle_relay_msg(
     mode: &Arc<AtomicU8>,
     agent_tx: &mpsc::UnboundedSender<Value>,
     forced_model: String,
+    forced_variant: String,
 ) {
     let t = msg.get("type").and_then(|v| v.as_str()).unwrap_or("");
     match t {
@@ -279,6 +281,7 @@ async fn handle_relay_msg(
             let opencode_c = Arc::clone(opencode);
             let mode_v = mode.load(Ordering::Relaxed);
             let forced_model = forced_model.clone();
+            let forced_variant = forced_variant.clone();
             let tx = agent_tx.clone();
             let id_task = id.clone();
             let method_task = method.clone();
@@ -287,7 +290,7 @@ async fn handle_relay_msg(
             let reply = tokio::spawn(async move {
                 let id = id_task;
                 let data: Result<Value, String> = if mode_v == MODE_OPENCODE {
-                    opencode_request(&opencode_c, &method_task, &path_task, body, forced_model.clone()).await
+                    opencode_request(&opencode_c, &method_task, &path_task, body, forced_model.clone(), forced_variant.clone()).await
                 } else {
                     dispatch(mini_c, &method_task, &path_task, body, tx)
                 };
@@ -393,7 +396,10 @@ pub async fn emit_status(
     online: bool,
 ) {
     let s = store.get();
-    let oc_running = opencode.lock().await.running();
+    let mut oc = opencode.lock().await;
+    let oc_running = oc.running();
+    let proxy_port = oc.proxy_port;
+    drop(oc);
     let m = mode.load(Ordering::Relaxed);
     let (running, model) = if m == MODE_OPENCODE {
         (oc_running, "opencode".to_string())
@@ -409,6 +415,7 @@ pub async fn emit_status(
             "online": online,
             "agentRunning": running,
             "agentModel": model,
+            "proxyPort": proxy_port,
         }),
     );
 }
@@ -420,20 +427,26 @@ async fn opencode_request(
     path: &str,
     body: Option<Value>,
     forced_model: String,
+    forced_variant: String,
 ) -> Result<Value, String> {
     let mut oc = opencode.lock().await;
     if !oc.running() {
         return Err("opencode 未启动".into());
     }
     // 强制指定模型：在 prompt 请求中注入 model 对象，避免使用 opencode 默认模型
-    // opencode 的 model 字段需要对象格式 {providerID, modelID}
+    // opencode 的 model 字段需要对象格式 {providerID, modelID, variant?}
     let mut body = body;
     if !forced_model.is_empty() && path.ends_with("/prompt_async") {
         let (provider, model_id) = match forced_model.split_once('/') {
             Some((p, m)) => (p.to_string(), m.to_string()),
             None => ("deepseek".to_string(), forced_model.clone()),
         };
-        let model_obj = json!({"providerID": provider, "modelID": model_id});
+        let mut model_obj = json!({"providerID": provider, "modelID": model_id});
+        // 思考力度透传：off / low / high / max（对应 deepseek-v4-flash 的 reasoning effort，off 关闭思考）
+        let v = forced_variant.trim();
+        if !v.is_empty() && v != "默认" {
+            model_obj["variant"] = Value::String(v.to_string());
+        }
         if let Some(b) = body.as_mut() {
             if b.get("model").is_none() {
                 b["model"] = model_obj;

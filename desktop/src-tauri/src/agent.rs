@@ -19,6 +19,24 @@ pub fn find_opencode() -> Option<PathBuf> {
     candidates.into_iter().flatten().find(|p| p.exists())
 }
 
+/// 从 DeepSeek Harness (DSH) 的凭据文件复用 `DEEPSEEK_API_KEY`，
+/// 让嵌入的 opencode 直接使用 DSH 已配置好的模型凭据，无需重复填写。
+/// 读取失败或没有该键时返回 None（不阻塞启动，由 opencode 自行决定能否连模型）。
+fn dsh_deepseek_key() -> Option<String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let path = std::path::Path::new(&home).join(".dsh/.credentials.yaml");
+    let content = std::fs::read_to_string(&path).ok()?;
+    let prefix = "DEEPSEEK_API_KEY:";
+    content.lines().find_map(|line| {
+        let t = line.trim();
+        t.strip_prefix(prefix).map(|v| {
+            v.trim()
+                .trim_matches(|c| c == '"' || c == '\'')
+                .to_string()
+        })
+    })
+}
+
 fn which(name: &str) -> Option<PathBuf> {
     let path = std::env::var("PATH").unwrap_or_default();
     for dir in path.split(':') {
@@ -48,6 +66,8 @@ pub struct OpenCodeAgent {
     pub port: u16,
     pub child: Option<Child>,
     password: String,
+    pub proxy_port: Option<u16>,
+    proxy_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 fn auth_header(password: &str) -> String {
@@ -64,6 +84,8 @@ impl OpenCodeAgent {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs())
                 .unwrap_or(0)),
+            proxy_port: None,
+            proxy_task: None,
         }
     }
 
@@ -137,6 +159,10 @@ impl OpenCodeAgent {
         .env("OPENCODE_CLIENT", "opencode-remote-desktop")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+        // 复用 DSH 已配置的 DeepSeek API Key（若存在），否则交由 opencode 自身凭据
+        if let Some(key) = dsh_deepseek_key().filter(|k| !k.trim().is_empty()) {
+            cmd.env("DEEPSEEK_API_KEY", key);
+        }
         if let Some(p) = permission.filter(|p| !p.trim().is_empty()) {
             cmd.env("OPENCODE_PERMISSION", p);
         }
@@ -196,6 +222,21 @@ impl OpenCodeAgent {
                 }
             }
             if self.health().await {
+                // 就绪后启动本地认证反代（WebView 内嵌 opencode 界面用）
+                if self.proxy_port.is_none() {
+                    let pport = self.port + 1;
+                    // 清理可能残留的旧反代，确保端口可绑
+                    kill_port_occupant(pport).await;
+                    self.proxy_task = Some(crate::proxy::spawn(self.port, self.password.clone(), pport));
+                    self.proxy_port = Some(pport);
+                    // 立即确认是否真的绑上，失败则重置以便下次重试
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                    let bound = crate::proxy::is_bound(pport).await;
+                    if !bound {
+                        if let Some(t) = self.proxy_task.take() { t.abort(); }
+                        self.proxy_port = None;
+                    }
+                }
                 return Ok(());
             }
         }
@@ -203,6 +244,10 @@ impl OpenCodeAgent {
     }
 
     pub async fn stop(&mut self) {
+        if let Some(task) = self.proxy_task.take() {
+            task.abort();
+        }
+        self.proxy_port = None;
         if let Some(mut child) = self.child.take() {
             let _ = child.kill().await;
             let _ = child.wait().await;

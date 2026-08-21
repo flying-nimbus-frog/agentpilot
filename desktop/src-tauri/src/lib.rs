@@ -1,6 +1,7 @@
 mod agent;
 mod agent_llm;
 mod engine;
+pub mod proxy;
 mod relay;
 mod store;
 
@@ -155,6 +156,9 @@ async fn agent_detect(state: State<'_, AppState>) -> Result<serde_json::Value, S
         "model": if m == MODE_OPENCODE {
             if s.opencode_model.is_empty() { "opencode默认(未指定)".to_string() } else { s.opencode_model.clone() }
         } else { state.mini.model_name() },
+        "variant": if m == MODE_OPENCODE {
+            if s.opencode_variant.is_empty() { "默认".to_string() } else { s.opencode_variant.clone() }
+        } else { String::new() },
         "configured": if m == MODE_OPENCODE {
             state.opencode.lock().await.running()
         } else {
@@ -171,6 +175,7 @@ async fn agent_start(
     model: String,
     dir: String,
     permission: Option<String>,
+    variant: String,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
@@ -187,6 +192,7 @@ async fn agent_start(
             if !model.trim().is_empty() {
                 cfg.opencode_model = model.trim().into();
             }
+            cfg.opencode_variant = variant.trim().into();
         });
         let mut oc = state.opencode.lock().await;
         oc.start(&state.store.get().agent_dir, permission.as_deref(), app.clone())
@@ -237,17 +243,21 @@ async fn agent_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), St
 async fn engine_status(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let s = state.store.get();
     let m = state.mode.load(Ordering::Relaxed);
+    let mut oc = state.opencode.lock().await;
     let running = if m == MODE_OPENCODE {
-        state.opencode.lock().await.running()
+        oc.running()
     } else {
         state.mini.configured()
     };
+    let proxy_port = oc.proxy_port;
+    drop(oc);
     Ok(json!({
         "paired": s.paired(),
         "pending": !s.pending_token.is_empty(),
         "loggedIn": !s.token.is_empty(),
         "agentRunning": running,
         "agentModel": if m == MODE_OPENCODE { "opencode" } else { "mini" },
+        "proxyPort": proxy_port,
     }))
 }
 

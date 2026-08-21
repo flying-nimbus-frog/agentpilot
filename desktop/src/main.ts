@@ -4,12 +4,13 @@ import { listen } from "@tauri-apps/api/event";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 // ---------- 状态 ----------
-let st: Record<string, boolean | string> = {
+let st: Record<string, boolean | string | number> = {
   paired: false,
   pending: false,
   loggedIn: false,
   agentRunning: false,
   agentModel: "",
+  proxyPort: 0,
 };
 
 function setChip(el: HTMLElement, text: string, kind: "green" | "gray" | "orange" | "red") {
@@ -51,6 +52,7 @@ function refreshStatus() {
   startBtn.textContent = st.agentRunning ? "Agent 运行中…" : "启动 Agent";
   const stopBtn = $("btn-agent-stop") as HTMLButtonElement;
   stopBtn.disabled = !st.agentRunning;
+  renderInterface();
 }
 
 // ---------- 活动（与手机端一致的聊天视图） ----------
@@ -290,14 +292,15 @@ function closeSettings() {
 }
 $("btn-settings").onclick = openSettings;
 
-function switchTab(name: "activity" | "log") {
-  for (const t of ["activity", "log"] as const) {
+function switchTab(name: "interface" | "activity" | "log") {
+  for (const t of ["interface", "activity", "log"] as const) {
     const tb = document.getElementById(`tab-${t}`) as HTMLButtonElement | null;
     const pn = document.getElementById(`pane-${t}`) as HTMLElement | null;
     if (tb) tb.classList.toggle("active", t === name);
     if (pn) pn.classList.toggle("active", t === name);
   }
 }
+$("tab-interface").onclick = () => switchTab("interface");
 $("tab-activity").onclick = () => switchTab("activity");
 $("tab-log").onclick = () => switchTab("log");
 
@@ -322,6 +325,7 @@ async function agentStartHandler() {
   const dir = ($("in-agent-dir") as HTMLInputElement).value.trim();
   const permission = ($("in-permission") as HTMLInputElement).value.trim() || null;
   const opencodeModel = ($("in-opencode-model") as HTMLInputElement).value.trim();
+  const opencodeVariant = ($("in-opencode-variant") as HTMLSelectElement).value;
   if (mode === "mini" && !apiKey) {
     $("agent-msg").textContent = "❌ 请先填写 API Key";
     $("agent-msg").style.color = "#cf222e";
@@ -334,7 +338,7 @@ async function agentStartHandler() {
   }
   try {
     $("agent-msg").textContent = "⏳ 正在启动…";
-    const r = (await invoke("agent_start", { mode, apiBase, apiKey, model: mode === "opencode" ? opencodeModel : model, dir, permission })) as { engine: string; model?: string };
+    const r = (await invoke("agent_start", { mode, apiBase, apiKey, model: mode === "opencode" ? opencodeModel : model, dir, permission, variant: mode === "opencode" ? opencodeVariant : "" })) as { engine: string; model?: string };
     st.agentRunning = true;
     st.agentModel = r.engine === "opencode" ? (opencodeModel || "opencode(默认)") : (r.model || "");
     $("agent-msg").textContent = r.engine === "opencode" ? "✅ opencode 已嵌入并启动（日志已接入）" : `✅ MiniAgent 启动成功 (${r.model})`;
@@ -361,12 +365,28 @@ async function agentStopHandler() {
 }
 
 
+// ---------- Agent 界面（opencode Web UI 内嵌） ----------
+function renderInterface() {
+  const frame = $("oc-frame") as HTMLIFrameElement;
+  const hint = $("interface-hint");
+  if (st.proxyPort) {
+    frame.src = frame.src || `http://127.0.0.1:${st.proxyPort}/`;
+    frame.classList.remove("hidden");
+    hint.classList.add("hidden");
+  } else {
+    frame.classList.add("hidden");
+    frame.src = "";
+    hint.classList.remove("hidden");
+  }
+}
+
 // ---------- 初始化 ----------
 async function init() {
   listen<string>("log", (e) => logLine(e.payload));
   listen("engine-status", (e) => {
     st = { ...st, ...(e.payload as Record<string, boolean | string>) };
     refreshStatus();
+    renderInterface();
   });
 
   try {
@@ -380,6 +400,7 @@ async function init() {
     if (settings.model) ($("in-model") as HTMLInputElement).value = settings.model;
     if (settings.agent_dir) ($("in-agent-dir") as HTMLInputElement).value = settings.agent_dir;
     if (settings.opencode_model) ($("in-opencode-model") as HTMLInputElement).value = settings.opencode_model;
+    if (settings.opencode_variant !== undefined) ($("in-opencode-variant") as HTMLSelectElement).value = settings.opencode_variant;
     if (settings.permission) ($("in-permission") as HTMLInputElement).value = settings.permission;
     if (settings.agent_mode) {
       const r = document.querySelector(`input[name="agent-mode"][value="${settings.agent_mode}"]`) as HTMLInputElement;
