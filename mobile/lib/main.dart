@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'api/relay.dart';
-import 'screens/sessions_screen.dart';
+import 'screens/home_shell.dart';
 import 'screens/login_screen.dart';
 import 'store/session_store.dart';
 
@@ -19,7 +19,7 @@ class OpenCodeRemoteApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AgentPilot',
+      title: '灵雀 Lingque',
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       theme: ThemeData(
@@ -39,7 +39,7 @@ class OpenCodeRemoteApp extends StatelessWidget {
                 if (!snapshot.hasData) {
                   return const Scaffold(body: Center(child: CircularProgressIndicator()));
                 }
-                return SessionsScreen(app: snapshot.data as RelayApp);
+                return HomeShell(app: snapshot.data as RelayApp);
               },
             ),
     );
@@ -61,7 +61,7 @@ class OpenCodeRemoteApp extends StatelessWidget {
     await app.fetchDevices();
     await app.connect();
     await navigatorKey.currentState!.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => SessionsScreen(app: app)),
+      MaterialPageRoute(builder: (_) => HomeShell(app: app)),
       (_) => false,
     );
   }

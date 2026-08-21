@@ -36,6 +36,8 @@ class RelayApp {
   StreamSubscription<dynamic>? _sub;
   Timer? _pingTimer;
   Timer? _reconnectTimer;
+  Timer? _watchdog;
+  DateTime? _lastRecv;
   bool _closed = false;
 
   final Map<String, Completer<CmdResult>> _pending = {};
@@ -219,6 +221,26 @@ class RelayApp {
     await fetchDevices();
   }
 
+  /// 手机端确认配对（v2 标准流程）：桌面端注册设备并显示配对码，
+  /// 手机端对这台"待配对"设备输入该码完成绑定。
+  Future<void> confirmPairDevice(String deviceId, String code) async {
+    final res = await http.post(
+      Uri.parse('$_httpBase/api/devices/$deviceId/pair'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'code': code}),
+    ).timeout(const Duration(seconds: 15));
+    if (res.statusCode == 401) throw ApiError('配对码错误，请检查后重试');
+    if (res.statusCode == 410) throw ApiError('配对码已过期，请在电脑端重新注册');
+    if (res.statusCode == 404) throw ApiError('设备不存在，请刷新后重试');
+    if (res.statusCode != 200) {
+      throw ApiError('配对失败 HTTP ${res.statusCode}');
+    }
+    await fetchDevices();
+  }
+
   // ---------- WebSocket ----------
 
   Future<void> connect() async {
@@ -246,6 +268,21 @@ class RelayApp {
     _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) {
       _safeSend({'type': 'ping'});
     });
+    // iOS 切后台会静默掐断 WS；这里每 10s 自检一次，
+    // 发现通道假死立即主动断开，触发重连，避免指令干等超时。
+    _watchdog?.cancel();
+    _lastRecv = DateTime.now();
+    _watchdog = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_closed || !identical(_ws, ws)) return;
+      final now = DateTime.now();
+      if (_lastRecv != null && now.difference(_lastRecv!) > const Duration(seconds: 22)) {
+        try {
+          _ws?.sink.close();
+        } catch (_) {
+          _onWsClosed(ws);
+        }
+      }
+    });
   }
 
   /// 仅当前连接可以更新状态；旧连接的断开事件一律忽略
@@ -256,6 +293,7 @@ class RelayApp {
 
   void _onMessage(dynamic raw) {
     try {
+      _lastRecv = DateTime.now();
       final msg = jsonDecode(raw as String) as Map<String, dynamic>;
       switch (msg['type']) {
         case 'device.list':
@@ -304,6 +342,7 @@ class RelayApp {
   void _onDisconnected() {
     _ws = null;
     wsAlive.value = false;
+    _watchdog?.cancel();
     _pingTimer?.cancel();
     _pending.forEach(
         (_, c) => c.complete(const CmdResult(id: '', ok: false, error: '连接断开')));
@@ -319,6 +358,7 @@ class RelayApp {
     _closed = true;
     _reconnectTimer?.cancel();
     _pingTimer?.cancel();
+    _watchdog?.cancel();
     await _sub?.cancel();
     await _ws?.sink.close();
     _ws = null;
@@ -337,12 +377,12 @@ class RelayApp {
   static int _seq = 0;
 
   Future<CmdResult> cmd(
-    String deviceId,
-    String method,
-    String path, [
-    Map<String, dynamic>? body,
-    Duration timeout = const Duration(seconds: 300),
-  ]) async {
+      String deviceId,
+      String method,
+      String path, [
+      Map<String, dynamic>? body,
+      Duration timeout = const Duration(milliseconds: 20000),
+    ]) async {
     final id = 'req_${DateTime.now().millisecondsSinceEpoch}_${_seq++}_${_rand.nextInt(9999)}';
     final completer = Completer<CmdResult>();
     _pending[id] = completer;

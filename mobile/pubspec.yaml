@@ -1,5 +1,5 @@
 name: agentpilot
-description: 在手机上遥控电脑上的 AI Agent。Account system + cloud relay, device pairing, permission approval, full logs.
+description: 灵雀 Lingque 手机端：遥控电脑上的 AI Agent。账号 + 云端中继，设备配对、权限审批、实时进度。
 publish_to: "none"
 version: 0.1.0
 
@@ -21,3 +21,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/

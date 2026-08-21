@@ -183,6 +183,27 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     if (target == null) {
+      // 服务端回推的正式消息替换本地乐观气泡（按文本去重），避免重复
+      final last = _messages.isNotEmpty ? _messages.last : null;
+      if (last != null &&
+          last.role == 'user' &&
+          last.id.startsWith('local_') &&
+          last.parts.length == 1 &&
+          last.parts.first.type == 'text' &&
+          (last.parts.first.text ?? '') == (part.text ?? '')) {
+        final parts = List<Part>.from(last.parts);
+        final pi = parts.indexWhere((p) => p.id == part.id);
+        if (pi >= 0) {
+          parts[pi] = part;
+        } else {
+          parts.add(part);
+        }
+        _messages = [
+          ..._messages.take(_messages.length - 1),
+          Message(id: mid ?? last.id, role: 'user', parts: parts),
+        ];
+        return;
+      }
       // 新消息：role 由 message.created 事件保证（见 _onMessageMeta），兜底用 _lastRole
       _messages = [
         ..._messages,
@@ -332,13 +353,21 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       return;
     }
+    // 乐观回显：先把用户消息立刻上屏，不等电脑端回推
+    final localId = 'local_${DateTime.now().millisecondsSinceEpoch}';
+    final localPart = Part(id: '${localId}_t', type: 'text', text: text);
     setState(() {
       _input.clear();
       _state = '运行中';
       _turnReasoning.clear();
       _reasoningDone = false;
       _turnTools.clear();
+      _messages = [
+        ..._messages,
+        Message(id: localId, role: 'user', parts: [localPart]),
+      ];
     });
+    _scrollToBottom();
     final r = await widget.app.cmd(_did, 'POST', '/session/$_sid/prompt_async',
         {'parts': [{'type': 'text', 'text': text}]});
     if (r.ok && mounted) {
@@ -346,6 +375,8 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (!r.ok && mounted) {
       setState(() {
+        // 发送失败：回滚本地乐观气泡，避免留下发不出去的消息
+        _messages = _messages.where((m) => m.id != localId).toList();
         _state = '空闲';
         _error = r.error;
       });

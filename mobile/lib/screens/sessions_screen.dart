@@ -7,9 +7,8 @@ import '../api/protocol.dart';
 import '../api/relay.dart';
 import '../push/apns.dart';
 import 'chat_screen.dart';
-import 'settings_sheet.dart';
 
-/// 首页：会话列表 + 顶部设备切换 + 设置入口
+/// 首页「会话」Tab：会话列表 + 顶部设备切换
 class SessionsScreen extends StatefulWidget {
   final RelayApp app;
   const SessionsScreen({super.key, required this.app});
@@ -20,12 +19,23 @@ class SessionsScreen extends StatefulWidget {
 
 class _SessionsScreenState extends State<SessionsScreen> {
   List<Session> _sessions = [];
-  Map<String, String> _status = {};
+  final Map<String, String> _status = {};
   bool _loading = true;
   String? _error;
   Device? _device;
-  String _pushState = '';
+  Timer? _retryTimer;
+  bool _loadInFlight = false;
   StreamSubscription<dynamic>? _sub;
+
+  /// 实时从设备列表读在线状态，避免快照停留在"离线"
+  Device? get _liveDevice {
+    final id = _device?.id;
+    if (id == null) return null;
+    for (final d in widget.app.devices) {
+      if (d.id == id) return d;
+    }
+    return _device;
+  }
 
   @override
   void initState() {
@@ -33,27 +43,49 @@ class _SessionsScreenState extends State<SessionsScreen> {
     widget.app.fetchPlan();
     _initPush();
     _pickDevice();
+    _load();
     _sub = widget.app.events.listen((ev) {
+      final t = ev['type'];
       final sid = ev['properties'] is Map ? ev['properties']['sessionID'] : null;
-      if (ev['type'] == 'session.status' && sid != null) {
+      if (t == 'session.status' && sid != null) {
         final st = ev['properties']['status'];
-        final t = st is Map ? st['type'] as String? : null;
-        if (t != null) {
-          setState(
-              () => _status[sid] = t == 'busy' ? '运行中' : t == 'idle' ? '空闲' : '出错');
+        final tt = st is Map ? st['type'] as String? : null;
+        if (tt != null) {
+          setState(() => _status[sid] =
+              tt == 'busy' ? '运行中' : tt == 'idle' ? '空闲' : '出错');
+        }
+      }
+      // 设备上线 → 立即刷新会话列表并清掉旧报错
+      if (t == 'device.online') {
+        final online = ev['online'] == true;
+        final did = ev['deviceID'];
+        if (did == _device?.id) {
+          if (online) {
+            if (mounted) setState(() => _error = null);
+            _load();
+          } else {
+            if (mounted) setState(() {});
+          }
         }
       }
       // 审批/补充信息请求到达：震动 + 提示音（全局）
-      final t = ev['type'];
       if (t == 'permission.asked' || t == 'permission.ask') {
         HapticFeedback.mediumImpact();
         SystemSound.play(SystemSoundType.alert);
       }
     });
+    // 设备离线/有报错时每 3s 自动重试，恢复正常即停
+    _retryTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted) return;
+      final d = _liveDevice;
+      if (d == null) return;
+      if (_error != null || !d.online) _load();
+    });
   }
 
   @override
   void dispose() {
+    _retryTimer?.cancel();
     _sub?.cancel();
     super.dispose();
   }
@@ -69,53 +101,75 @@ class _SessionsScreenState extends State<SessionsScreen> {
     try {
       final granted = await Apns.requestPermission();
       if (!granted) {
-        setState(() => _pushState = '⚠️ 推送未授权');
+        
         return;
       }
-      setState(() => _pushState = '推送注册中…');
+      
       Apns.onToken((token) async {
         await widget.app.registerPushToken(token);
-        if (mounted) setState(() => _pushState = '推送已注册');
+        
       });
       final token = await Apns.getToken();
       if (token != null && token.isNotEmpty) {
         await widget.app.registerPushToken(token);
-        if (mounted) setState(() => _pushState = '推送已注册');
+        
       }
     } catch (_) {}
   }
 
   Future<void> _load() async {
-    if (_device == null) {
-      _pickDevice();
-      if (_device == null) return;
-    }
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    if (_loadInFlight) return;
+    _loadInFlight = true;
     try {
-      final r = await widget.app.cmd(_device!.id, 'GET', '/session');
+      if (_device == null) {
+        _pickDevice();
+        if (_device == null) return;
+      }
+      if (!widget.app.wsAlive.value) {
+        await widget.app.connect();
+      }
+      // 已有数据时后台静默刷新，不闪转圈
+      final hadData = _sessions.isNotEmpty;
+      setState(() {
+        _loading = !hadData;
+        _error = null;
+      });
+      final device = _device!;
+      // 会话列表与状态并行拉取，一次性渲染
+      final results = await Future.wait([
+        widget.app.cmd(device.id, 'GET', '/session'),
+        widget.app.cmd(device.id, 'GET', '/session/status'),
+      ]);
+      final r = results[0];
       if (!r.ok) throw ApiError(r.error ?? '获取会话失败');
       final raw = (r.data as List?) ?? [];
-      setState(() {
-        _sessions = raw
-            .map((e) => Session.fromJson(e as Map<String, dynamic>))
-            .toList()
-          ..sort((a, b) => b.updated.compareTo(a.updated));
-      });
-      final st = await widget.app.cmd(_device!.id, 'GET', '/session/status');
+      final sessions = raw
+          .map((e) => Session.fromJson(e as Map<String, dynamic>))
+          .toList()
+        ..sort((a, b) => b.updated.compareTo(a.updated));
+      final st = results[1];
       if (st.ok && st.data is Map) {
         final m = st.data as Map<String, dynamic>;
-        _status = m.map((k, v) {
+        final statusTmp = <String, String>{};
+        m.forEach((k, v) {
           final t = (v is Map) ? v['type'] as String? : null;
-          return MapEntry(k, t == 'busy' ? '运行中' : t == 'idle' ? '空闲' : '出错');
+          statusTmp[k] = t == 'busy' ? '运行中' : t == 'idle' ? '空闲' : '出错';
         });
+        statusTmp.forEach((k, v) => _status[k] = v);
       }
+      if (!mounted) return;
+      setState(() {
+        _sessions = sessions;
+        _loading = false;
+      });
     } catch (e) {
-      setState(() => _error = '$e');
+      if (!mounted) return;
+      setState(() {
+        _error = '$e';
+        _loading = false;
+      });
     } finally {
-      if (mounted) setState(() => _loading = false);
+      _loadInFlight = false;
     }
   }
 
@@ -178,19 +232,9 @@ class _SessionsScreenState extends State<SessionsScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: '设置',
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () async {
-              await showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                builder: (_) => SettingsSheet(app: widget.app, pushState: _pushState),
-              );
-              // 设置页可能改了设备/账号，刷新
-              await widget.app.fetchDevices();
-              if (mounted) setState(() => _pickDevice());
-              _load();
-            },
+            tooltip: '刷新',
+            icon: const Icon(Icons.refresh),
+            onPressed: _load,
           ),
         ],
       ),
@@ -201,20 +245,25 @@ class _SessionsScreenState extends State<SessionsScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  if (_device != null)
+                  if (_liveDevice != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Row(children: [
-                        Icon(Icons.desktop_mac,
-                            size: 14,
-                            color: _device!.online ? Colors.green : Colors.grey),
+                        const Icon(Icons.desktop_mac,
+                            size: 14, color: Color(0xFF57606A)),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            '${_device!.name} · ${_device!.online ? "在线" : "离线"}',
+                            _liveDevice!.online
+                                ? '${_liveDevice!.name} · 在线'
+                                : _liveDevice!.name,
                             style: const TextStyle(
-                                fontSize: 12, color: Color(0xFF57606A))),
+                                fontSize: 12, color: Color(0xFF57606A)),
+                          ),
                         ),
+                        if (_liveDevice!.online)
+                          const Icon(Icons.check_circle,
+                              size: 13, color: Colors.green),
                         if (widget.app.plan == 'pro')
                           const Text('Pro',
                               style: TextStyle(
@@ -223,18 +272,25 @@ class _SessionsScreenState extends State<SessionsScreen> {
                                   fontWeight: FontWeight.w600)),
                       ]),
                     ),
-                  if (_error != null)
+                  if (_error != null &&
+                      _liveDevice != null &&
+                      _liveDevice!.online)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Text(_error!,
                           style: const TextStyle(color: Colors.red, fontSize: 13)),
                     ),
                   if (_sessions.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 80),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 80),
                       child: Center(
-                          child: Text('暂无会话，点右下角新建',
-                              style: TextStyle(color: Colors.grey))),
+                        child: Text(
+                          (_liveDevice != null && !_liveDevice!.online)
+                              ? '等待设备上线…'
+                              : '暂无会话，点右下角新建',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      ),
                     ),
                   for (final s in _sessions)
                     Card(

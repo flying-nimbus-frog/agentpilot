@@ -415,10 +415,11 @@ def api_devices_pair_by_code(
             if now > dev["pairing_expires"]:
                 db.delete_device(user["id"], dev["id"])
                 raise HTTPException(410, "Pairing code expired, please re-register on the computer")
-            # 免费套餐兜底：激活时再查一次额度
+            # 免费套餐兜底：激活时再查一次额度。待配对设备本身已计入 quota，
+            # 因此只能拦截"超限"（>），不能 >=（否则连第一台都永远配不上）。
             plan = user["plan"]
             limit = FREE_DEVICE_LIMIT if plan != "pro" else 999
-            if db.count_bound_devices(user["id"]) >= limit:
+            if db.count_bound_devices(user["id"]) > limit:
                 raise HTTPException(403, "Free plan allows 1 device. Upgrade to Pro for unlimited devices.")
             result = db.activate_pending_device(dev["id"], user["id"])
             if not result:

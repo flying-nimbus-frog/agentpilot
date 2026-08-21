@@ -63,7 +63,10 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('🤖 AgentPilot',
+                  Image.asset('assets/icon/icon-1024-opaque.png',
+                      width: 88, height: 88),
+                  const SizedBox(height: 12),
+                  const Text('灵雀 Lingque',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 4),
